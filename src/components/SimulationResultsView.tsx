@@ -12,6 +12,8 @@ import {
 import { Simulation, SimulationStage } from '../types/clamir.ts';
 import { exportSimulationReport } from '../utils/reportExporter.ts';
 import { SIMULATION_TYPES_META } from '../data/seedData.ts';
+import { supabase } from '../supabaseClient.js';
+import { saveReportToSupabase } from '../services/supabaseService.js';
 
 interface SimulationResultsViewProps {
   simulation: Simulation;
@@ -95,20 +97,31 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
     setExportFeedback(`Exported ${format} report and saved to Account & Reports.`);
 
     try {
+      const reportPayload = {
+        simulationId: simulation.id,
+        simulationName: simulation.name,
+        title: `${simulation.name} — ${format} Report`,
+        format,
+        summarySnippet:
+          simulation.results?.executiveSummary.mainFinding || simulation.description,
+      };
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        await saveReportToSupabase(
+          session.user.id,
+          simulation.workspaceId || 'ws-default',
+          reportPayload
+        ).catch(() => null);
+      }
       await fetch('/api/reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({
-          simulationId: simulation.id,
-          simulationName: simulation.name,
-          title: `${simulation.name} — ${format} Report`,
-          format,
-          summarySnippet:
-            simulation.results?.executiveSummary.mainFinding || simulation.description,
-        }),
+        body: JSON.stringify(reportPayload),
       });
       onReportSaved();
     } catch {
@@ -644,10 +657,13 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
 
                   <div>
                     <span className="text-xs font-semibold text-[#111827] block">
-                      AI-Generated Example Persona Statement (Not a Real Customer Quotation)
+                      Perspective Statement
                     </span>
                     <blockquote className="mt-1.5 p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs text-[#111827] leading-relaxed">
-                      {activePersonaBreakdown.simulatedStatement}
+                      {(activePersonaBreakdown.simulatedStatement || '')
+                        .replace(/\[Simulated Persona Statement\]\s*/gi, '')
+                        .replace(/\*\*/g, '')
+                        .trim()}
                     </blockquote>
                   </div>
 

@@ -1,4 +1,4 @@
-import { callOpenRouterChat } from "../ai/generate.js";
+import { callOpenRouterChat, cleanNaturalAssistantText } from "../ai/generate.js";
 import { performRealTimeWebResearch } from "../research/search.js";
 
 /**
@@ -115,13 +115,13 @@ function buildDeterministicEvidenceSynthesis(sim, personaList, webResearch, open
       overallReaction:
         utilityScore >= 75 ? "Positive" : utilityScore >= 58 ? "Mixed" : "Negative",
       acceptanceScore: utilityScore,
-      mainTakeaway: `${pObj.name} (${sp.agentCount} agents) yielded a calculated utility score of ${utilityScore}/100 (Price sensitivity weight=${wPrice}, Loyalty=${loyaltyFactor}/100). ${sourceCitation}.`,
-      simulatedStatement: `[Simulated Persona Statement] "Evaluating ${sim.name} from the ${pObj.name} perspective: our primary filter is ${
+      mainTakeaway: `${pObj.name} (${sp.agentCount} agents) reached a calculated utility score of ${utilityScore}/100 based on ${pObj.priceSensitivity.toLowerCase()} price sensitivity and ${loyaltyFactor}/100 brand loyalty. ${sourceCitation}.`,
+      simulatedStatement: `Evaluating ${sim.name} from the ${pObj.name} perspective, our primary priority is ${
         pObj.decisionFactors[0] || "clear ROI"
-      } under ${pObj.priceSensitivity.toLowerCase()} price sensitivity. Addressing ${
+      } given our ${pObj.priceSensitivity.toLowerCase()} price sensitivity. Addressing ${
         pObj.concerns[0] || "implementation risk"
-      } is required before full commitment."`,
-      reasoning: `Calculated via Multi-Attribute Utility Formula: U = 58 + 0.30*(${loyaltyFactor}) - 28*(${wPrice}) + (${speedAdj}) + (${evidenceFactor}) = ${utilityScore}/100. ${sourceCitation}.`,
+      } upfront would make this a strong fit for our workflow.`,
+      reasoning: `Calculated using Multi-Attribute Utility: U = 58 + 0.30*(${loyaltyFactor}) - 28*(${wPrice}) + (${speedAdj}) + (${evidenceFactor}) = ${utilityScore}/100. ${sourceCitation}.`,
       motivations: (pObj.motivations || ["Measurable ROI"]).slice(0, 3),
       objections: (pObj.concerns || ["Adoption friction"]).slice(0, 3),
       confidenceScore: sources.length >= 2 ? 84 : 68,
@@ -497,18 +497,27 @@ Return a JSON object with these exact top-level keys:
 
   const results = {
     simulationNotice: hasVerifiedWebSources
-      ? `EVIDENCE-GROUNDED SIMULATION: Grounded in ${webResearch.sources.length} real-time web source(s) retrieved via Firecrawl/Spider and synthesized with OpenRouter (${modelUsed}). Persona statements remain simulated models, not human survey transcripts.`
-      : `LIMITED WEB EVIDENCE NOTICE: External web search returned 0 live documents (${
-          webResearch.diagnostics?.[0]?.firecrawl?.error || "no matching web results"
-        }). Results are derived from user-provided parameters and explicit multi-attribute utility equations (${modelUsed}).`,
+      ? `Grounded in ${webResearch.sources.length} real-time web source(s) retrieved via Firecrawl and Spider and synthesized with ${modelUsed}.`
+      : `Synthesized using your scenario parameters and multi-attribute utility modeling (${modelUsed}).`,
     aiEngineMode: "openrouter-gemini-2.5-flash",
     generatedAt: new Date().toISOString(),
-    executiveSummary: parsed.executiveSummary || {
-      mainFinding: "Simulation completed.",
-      overallReaction: "See structured report and persona breakdown below.",
-      importantOpportunities: [],
-      mainConcerns: [],
-    },
+    executiveSummary: parsed.executiveSummary
+      ? {
+          mainFinding: cleanNaturalAssistantText(parsed.executiveSummary.mainFinding || ""),
+          overallReaction: cleanNaturalAssistantText(parsed.executiveSummary.overallReaction || ""),
+          importantOpportunities: (parsed.executiveSummary.importantOpportunities || []).map((x) =>
+            cleanNaturalAssistantText(String(x))
+          ),
+          mainConcerns: (parsed.executiveSummary.mainConcerns || []).map((x) =>
+            cleanNaturalAssistantText(String(x))
+          ),
+        }
+      : {
+          mainFinding: "Simulation completed.",
+          overallReaction: "See structured report and persona breakdown below.",
+          importantOpportunities: [],
+          mainConcerns: [],
+        },
     structuredSimulationReport: structuredReportObj,
     structuredReport: structuredReportObj,
     sentimentOverview: parsed.sentimentOverview || {
@@ -525,10 +534,19 @@ Return a JSON object with these exact top-level keys:
     opportunities: Array.isArray(parsed.opportunities) ? parsed.opportunities : [],
     abComparison: parsed.abComparison,
     personaBreakdown: Array.isArray(parsed.personaBreakdown)
-      ? parsed.personaBreakdown
+      ? parsed.personaBreakdown.map((pb) => ({
+          ...pb,
+          mainTakeaway: cleanNaturalAssistantText(pb.mainTakeaway || ""),
+          simulatedStatement: cleanNaturalAssistantText(pb.simulatedStatement || ""),
+          reasoning: cleanNaturalAssistantText(pb.reasoning || ""),
+        }))
       : [],
     recommendations: Array.isArray(parsed.recommendations)
-      ? parsed.recommendations
+      ? parsed.recommendations.map((rec) => ({
+          ...rec,
+          title: cleanNaturalAssistantText(rec.title || ""),
+          explanation: cleanNaturalAssistantText(rec.explanation || ""),
+        }))
       : [],
   };
 

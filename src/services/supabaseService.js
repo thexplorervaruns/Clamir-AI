@@ -3,16 +3,50 @@ import { BUILT_IN_PERSONAS } from "../data/seedData.ts";
 
 const OWNER_EMAIL = "thexplorervaruns@gmail.com";
 
+export function normalizeConsistentUserName(rawName, email = "") {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const trimmed = String(rawName || "").trim();
+  const lower = trimmed.toLowerCase();
+
+  const isInvalidOrUnexpected =
+    !trimmed ||
+    lower === "tank" ||
+    lower.startsWith("tank ") ||
+    lower === "varun (workspace owner)" ||
+    lower === "clamir user" ||
+    lower === "clamir explorer";
+
+  if (!isInvalidOrUnexpected) {
+    return trimmed;
+  }
+
+  if (cleanEmail === OWNER_EMAIL) {
+    return "Varuna";
+  }
+  if (cleanEmail === "mailattvaruns@gmail.com") {
+    return "Varun S";
+  }
+  if (cleanEmail && cleanEmail.includes("@")) {
+    const prefix = cleanEmail.split("@")[0];
+    if (prefix && prefix.toLowerCase() !== "tank") {
+      return prefix;
+    }
+  }
+  return "Varuna";
+}
+
 // ---------------------------------------------------------------------------
 // 1. SUPABASE AUTHENTICATION HELPERS
 // ---------------------------------------------------------------------------
 export async function signUpWithSupabase({ email, password, name = "" }) {
+  const cleanEmail = String(email).trim();
+  const resolvedName = normalizeConsistentUserName(name, cleanEmail);
   const { data, error } = await supabase.auth.signUp({
-    email: String(email).trim(),
+    email: cleanEmail,
     password: String(password),
     options: {
       data: {
-        full_name: String(name).trim() || String(email).split("@")[0],
+        full_name: resolvedName,
       },
     },
   });
@@ -162,10 +196,10 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
   if (!sessionUser || !sessionUser.id) return null;
   const userId = sessionUser.id;
   const email = sessionUser.email || "";
-  const defaultName =
-    sessionUser.user_metadata?.full_name ||
-    sessionUser.user_metadata?.name ||
-    (email.toLowerCase() === OWNER_EMAIL ? "Varuna" : email.split("@")[0] || "Clamir User");
+  const defaultName = normalizeConsistentUserName(
+    sessionUser.user_metadata?.full_name || sessionUser.user_metadata?.name,
+    email
+  );
   const isOwner = email.toLowerCase() === OWNER_EMAIL;
 
   // 1. Load or create user_profiles row
@@ -185,14 +219,26 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
     .maybeSingle();
 
   if (!profileErr && profileRow) {
+    const resolvedProfileName = normalizeConsistentUserName(
+      profileRow.name,
+      profileRow.email || email
+    );
     userProfile = {
       id: profileRow.id,
-      name: profileRow.name || defaultName,
+      name: resolvedProfileName,
       email: profileRow.email || email,
       plan: profileRow.plan || "Explorer",
       isOwner: Boolean(profileRow.is_owner) || isOwner,
       createdAt: profileRow.created_at || userProfile.createdAt,
     };
+
+    // Permanently repair stale or "tank" username in Supabase user_profiles if detected
+    if (profileRow.name !== resolvedProfileName) {
+      await supabase
+        .from("user_profiles")
+        .update({ name: resolvedProfileName })
+        .eq("user_id", userId);
+    }
   } else if (!profileErr && !profileRow) {
     const { data: insertedProfile } = await supabase
       .from("user_profiles")
@@ -210,7 +256,7 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
     if (insertedProfile) {
       userProfile = {
         id: insertedProfile.id,
-        name: insertedProfile.name,
+        name: normalizeConsistentUserName(insertedProfile.name, insertedProfile.email || email),
         email: insertedProfile.email,
         plan: insertedProfile.plan,
         isOwner: Boolean(insertedProfile.is_owner) || isOwner,
@@ -553,7 +599,13 @@ export async function clearRecentSearchesInSupabase(userId, workspaceId) {
 
 export async function updateProfileInSupabase(userId, { name, email, plan }) {
   const updates = {};
-  if (name) updates.name = String(name).trim();
+  if (name) {
+    const normalizedName = normalizeConsistentUserName(name, email);
+    updates.name = normalizedName;
+    await supabase.auth
+      .updateUser({ data: { full_name: normalizedName } })
+      .catch(() => null);
+  }
   if (email) updates.email = String(email).trim();
   if (plan) updates.plan = plan;
 
@@ -567,3 +619,74 @@ export async function updateProfileInSupabase(userId, { name, email, plan }) {
   if (error || !data) return null;
   return data;
 }
+
+export async function toggleFavoritePersonaInSupabase(userId, workspaceId, personaId) {
+  const { data: ws } = await supabase
+    .from("workspaces")
+    .select("favorite_persona_ids")
+    .eq("id", workspaceId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!ws) return false;
+  const list = Array.isArray(ws.favorite_persona_ids) ? ws.favorite_persona_ids : [];
+  const nextList = list.includes(personaId)
+    ? list.filter((id) => id !== personaId)
+    : [...list, personaId];
+
+  const { error } = await supabase
+    .from("workspaces")
+    .update({ favorite_persona_ids: nextList })
+    .eq("id", workspaceId)
+    .eq("user_id", userId);
+
+  return !error;
+}
+
+export async function saveConversationToSupabase(userId, workspaceId, conv) {
+  const isUuid =
+    conv.id &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conv.id);
+
+  const simUuid =
+    conv.simulationId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conv.simulationId)
+      ? conv.simulationId
+      : null;
+
+  const rowPayload = {
+    user_id: userId,
+    workspace_id: workspaceId,
+    simulation_id: simUuid,
+    persona_id: conv.personaId || null,
+    title: conv.title || "Research Conversation",
+    messages: Array.isArray(conv.messages) ? conv.messages : [],
+  };
+
+  if (isUuid) {
+    const { data, error } = await supabase
+      .from("agent_conversations")
+      .upsert({ id: conv.id, ...rowPayload })
+      .select("*")
+      .single();
+    if (!error && data) return mapConversationRow(data);
+  } else {
+    const { data, error } = await supabase
+      .from("agent_conversations")
+      .insert(rowPayload)
+      .select("*")
+      .single();
+    if (!error && data) return mapConversationRow(data);
+  }
+  return null;
+}
+
+export async function deleteConversationInSupabase(userId, conversationId) {
+  const { error } = await supabase
+    .from("agent_conversations")
+    .delete()
+    .eq("id", conversationId)
+    .eq("user_id", userId);
+  return !error;
+}
+

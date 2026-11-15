@@ -20,6 +20,7 @@ import { supabase } from '../supabaseClient.js';
 import {
   deletePersonaInSupabase,
   savePersonaToSupabase,
+  toggleFavoritePersonaInSupabase,
 } from '../services/supabaseService.js';
 
 interface AudienceDatabaseProps {
@@ -198,6 +199,16 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
   };
 
   const handleToggleFavorite = async (persona: Persona) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      await toggleFavoritePersonaInSupabase(
+        session.user.id,
+        persona.workspaceId || 'ws-default',
+        persona.id
+      ).catch(() => false);
+    }
     await fetch(`/api/personas/${persona.id}/favorite`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${authToken}` },
@@ -212,6 +223,16 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
     });
     if (res.ok) {
       const data = await res.json();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user && data.persona) {
+        await savePersonaToSupabase(
+          session.user.id,
+          data.persona.workspaceId || 'ws-default',
+          data.persona
+        ).catch(() => null);
+      }
       onPersonasChanged();
       if (data.persona?.id) {
         setSelectedPersonaId(data.persona.id);

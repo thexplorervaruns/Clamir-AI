@@ -701,7 +701,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
           mainTakeaway:
             'Appreciates unlimited simulations and zero per-seat fees, but scrutinizes the $0 to $149 step-up unless anchored against agency research costs.',
           simulatedStatement:
-            '[Simulated Persona Statement] "If this replaces even one external survey panel a quarter, $149/month pays for itself ten times over—but I need to see one full export on the free plan before I put down a corporate card."',
+            'If this replaces even one external survey panel a quarter, $149/month pays for itself ten times over, though I want to inspect one full export on the free plan before putting down a corporate card.',
           answers: [
             {
               questionId: 'q-1',
@@ -736,7 +736,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
           mainTakeaway:
             'Views $149/mo as well-justified because it unlocks the Custom Persona library, Web Search grounding, and structured JSON/CSV exports.',
           simulatedStatement:
-            '[Simulated Persona Statement] "The price is secondary to methodological rigor. Having full access to custom persona attributes and raw JSON/CSV data in the Growth tier makes $149 an easy decision."',
+            'The price is secondary to methodological rigor. Having full access to custom persona attributes and raw JSON/CSV data in the Growth tier makes $149 an easy decision.',
           answers: [
             {
               questionId: 'q-1',
@@ -771,7 +771,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
           mainTakeaway:
             'Converts quickly for one-click PDF executive briefs and ready-to-use persona presets that save hours of manual research prep.',
           simulatedStatement:
-            '[Simulated Persona Statement] "If I can walk into a Monday product review with a downloadable PDF brief in five minutes, $149/month is a no-brainer."',
+            'If I can walk into a Monday product review with a downloadable PDF brief in five minutes, $149/month is a no-brainer.',
           answers: [
             {
               questionId: 'q-1',
@@ -980,7 +980,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
           acceptanceScore: 91,
           mainTakeaway: 'Strongly endorses Option B for its grounded, strategic tone.',
           simulatedStatement:
-            '[Simulated Persona Statement] "Option B speaks to actual product strategy—testing pricing and reactions before committing capital. Option A sounds like another disposable wrapper."',
+            'Option B speaks to actual product strategy—testing pricing and reactions before committing capital. Option A sounds like another disposable wrapper.',
           answers: [
             {
               questionId: 'q-ab-1',
@@ -1008,7 +1008,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
           acceptanceScore: 81,
           mainTakeaway: 'Split between Option A’s speed promise and Option B’s clear use-case list.',
           simulatedStatement:
-            '[Simulated Persona Statement] "I like knowing it only takes a minute from Option A, but Option B tells me right away that I can test my pricing tiers today."',
+            'I like knowing it only takes a minute from Option A, but Option B tells me right away that I can test my pricing tiers today.',
           answers: [
             {
               questionId: 'q-ab-1',

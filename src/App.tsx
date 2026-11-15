@@ -54,7 +54,9 @@ import {
   deleteSimulationInSupabase,
   loadUserWorkspaceFromSupabase,
   logRecentSearchToSupabase,
+  normalizeConsistentUserName,
   renameWorkspaceInSupabase,
+  saveSimulationToSupabase,
   signOutFromSupabase,
 } from './services/supabaseService.js';
 
@@ -93,9 +95,7 @@ export default function App() {
   const [simSearchQuery, setSimSearchQuery] = useState('');
 
   // Global Context & Agent state accessible across the entire app
-  const [agentFocusSimId, setAgentFocusSimId] = useState<string | null>(
-    INITIAL_SAMPLE_SIMULATIONS[0]?.id || null
-  );
+  const [agentFocusSimId, setAgentFocusSimId] = useState<string | null>(null);
   const [agentFocusPersonaId, setAgentFocusPersonaId] = useState<string | null>(null);
 
   // Workspace Switcher Modal State
@@ -123,10 +123,16 @@ export default function App() {
           data: { session },
         } = await supabase.auth.getSession();
 
-        if (session?.user) {
+        if (session?.user && session.access_token === token) {
           const supaData = await loadUserWorkspaceFromSupabase(session.user, wsId);
           if (supaData) {
-            setUser(supaData.user);
+            setUser((prev) => ({
+              ...supaData.user,
+              name: normalizeConsistentUserName(
+                prev?.name || supaData.user.name,
+                supaData.user.email || prev?.email
+              ),
+            }));
             setWorkspaces(supaData.workspaces);
             setActiveWorkspaceId(supaData.activeWorkspaceId);
             if (supaData.simulations.length > 0) {
@@ -151,7 +157,13 @@ export default function App() {
         });
         if (res.ok) {
           const data = await res.json();
-          setUser(data.user);
+          setUser((prev) => ({
+            ...data.user,
+            name: normalizeConsistentUserName(
+              data.user?.name || prev?.name,
+              data.user?.email || prev?.email
+            ),
+          }));
           setWorkspaces(data.workspaces);
           setActiveWorkspaceId(data.activeWorkspaceId);
           setSimulations(data.simulations);
@@ -191,6 +203,11 @@ export default function App() {
           path === '/account';
 
         if (session && session.user) {
+          const resolvedInitialName = normalizeConsistentUserName(
+            session.user.user_metadata?.full_name || session.user.user_metadata?.name,
+            session.user.email
+          );
+
           // Sync session with backend API
           const syncRes = await fetch('/api/auth/supabase-session', {
             method: 'POST',
@@ -201,17 +218,20 @@ export default function App() {
             body: JSON.stringify({
               userId: session.user.id,
               email: session.user.email || '',
-              name:
-                session.user.user_metadata?.full_name ||
-                session.user.email?.split('@')[0] ||
-                'Clamir User',
+              name: resolvedInitialName,
             }),
           }).catch(() => null);
 
           if (syncRes && syncRes.ok) {
             const synced = await syncRes.json();
             setAuthToken(session.access_token);
-            setUser(synced.user);
+            setUser({
+              ...synced.user,
+              name: normalizeConsistentUserName(
+                synced.user?.name || resolvedInitialName,
+                synced.user?.email || session.user.email
+              ),
+            });
             setWorkspaces(synced.workspaces);
             if (synced.workspaces?.[0]) {
               setActiveWorkspaceId(synced.workspaces[0].id);
@@ -220,10 +240,7 @@ export default function App() {
             setAuthToken(session.access_token);
             setUser({
               id: session.user.id,
-              name:
-                session.user.user_metadata?.full_name ||
-                session.user.email?.split('@')[0] ||
-                'Clamir User',
+              name: resolvedInitialName,
               email: session.user.email || '',
               plan: 'Explorer',
               isOwner:
@@ -300,7 +317,10 @@ export default function App() {
     workspaces: Workspace[];
   }) => {
     setAuthToken(payload.token);
-    setUser(payload.user);
+    setUser({
+      ...payload.user,
+      name: normalizeConsistentUserName(payload.user.name, payload.user.email),
+    });
     setWorkspaces(payload.workspaces);
     if (payload.workspaces[0]) {
       setActiveWorkspaceId(payload.workspaces[0].id);
@@ -524,8 +544,7 @@ export default function App() {
     );
   });
 
-  const displayUserName =
-    user.name === 'Varun (Workspace Owner)' ? 'Varuna' : user.name || 'Varuna';
+  const displayUserName = normalizeConsistentUserName(user.name, user.email);
 
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-white text-[#111827] flex flex-col">
@@ -776,7 +795,7 @@ export default function App() {
                         CLAMIR WORKSPACE
                       </span>
                       <h1 className="text-2xl font-bold text-[#111827] mt-0.5">
-                        Welcome back, {displayUserName.split(' ')[0]}
+                        Welcome back, {displayUserName}
                       </h1>
                       <p className="text-xs sm:text-sm text-[#6B7280]">
                         Simulate custom target audiences, interrogate context with AI agents, and export full research reports.
@@ -1008,6 +1027,11 @@ export default function App() {
                       setSimulations((prev) =>
                         prev.map((s) => (s.id === updatedSim.id ? updatedSim : s))
                       );
+                      if (user && updatedSim.status === 'Completed') {
+                        saveSimulationToSupabase(user.id, activeWorkspaceId, updatedSim).catch(
+                          () => null
+                        );
+                      }
                     }}
                     onOpenInAgent={(simId) => {
                       setAgentFocusSimId(simId);

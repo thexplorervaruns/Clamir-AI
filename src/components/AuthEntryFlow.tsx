@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import { ClamirLogo } from './ClamirLogo.tsx';
 import { supabase } from '../supabaseClient.js';
+import { normalizeConsistentUserName } from '../services/supabaseService.js';
 import { UserProfile, Workspace } from '../types/clamir.ts';
 
 interface AuthEntryFlowProps {
@@ -34,6 +35,12 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
     supaUser: { id: string; email?: string; user_metadata?: Record<string, any>; created_at?: string },
     fallbackName?: string
   ) => {
+    const cleanEmail = supaUser.email || email.trim();
+    const resolvedName = normalizeConsistentUserName(
+      fallbackName || supaUser.user_metadata?.full_name || supaUser.user_metadata?.name,
+      cleanEmail
+    );
+
     try {
       const res = await fetch('/api/auth/supabase-session', {
         method: 'POST',
@@ -43,20 +50,20 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
         },
         body: JSON.stringify({
           userId: supaUser.id,
-          email: supaUser.email || email.trim(),
-          name:
-            fallbackName?.trim() ||
-            supaUser.user_metadata?.full_name ||
-            supaUser.email?.split('@')[0] ||
-            'Clamir User',
+          email: cleanEmail,
+          name: resolvedName,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+        const normalizedUser: UserProfile = {
+          ...data.user,
+          name: normalizeConsistentUserName(data.user?.name || resolvedName, data.user?.email || cleanEmail),
+        };
         window.history.pushState({}, '', '/');
         onSuccess({
           token: accessToken,
-          user: data.user,
+          user: normalizedUser,
           workspaces: data.workspaces,
         });
         return;
@@ -65,14 +72,9 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
       // Fallback to local profile object if backend sync is unreachable
     }
 
-    const cleanEmail = supaUser.email || email.trim();
     const fallbackUser: UserProfile = {
       id: supaUser.id,
-      name:
-        fallbackName?.trim() ||
-        supaUser.user_metadata?.full_name ||
-        cleanEmail.split('@')[0] ||
-        'Clamir User',
+      name: resolvedName,
       email: cleanEmail,
       plan: 'Explorer',
       isOwner: cleanEmail.toLowerCase() === 'thexplorervaruns@gmail.com',
@@ -139,9 +141,15 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
 
       setLoading(true);
       try {
+        const resolvedSignUpName = normalizeConsistentUserName(name, cleanEmail);
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: cleanEmail,
           password,
+          options: {
+            data: {
+              full_name: resolvedSignUpName,
+            },
+          },
         });
 
         if (signUpError) {
@@ -155,7 +163,11 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
         }
 
         if (data.user) {
-          await syncSupabaseSessionWithWorkspace(data.session.access_token, data.user, name);
+          await syncSupabaseSessionWithWorkspace(
+            data.session.access_token,
+            data.user,
+            resolvedSignUpName
+          );
         }
       } catch {
         setError('Unable to reach Supabase authentication service. Please try again.');
@@ -183,7 +195,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
         return;
       }
 
-      await syncSupabaseSessionWithWorkspace(data.session.access_token, data.user, name);
+      await syncSupabaseSessionWithWorkspace(data.session.access_token, data.user);
     } catch {
       setError('Unable to reach Supabase authentication service. Please try again.');
     } finally {
@@ -252,6 +264,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                 <User className="w-4 h-4 text-[#6B7280] absolute left-3 top-2.5" />
                 <input
                   type="text"
+                  autoComplete="off"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"

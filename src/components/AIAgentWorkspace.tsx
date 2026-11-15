@@ -19,6 +19,12 @@ import {
   Persona,
   Simulation,
 } from '../types/clamir.ts';
+import { supabase } from '../supabaseClient.js';
+import {
+  deleteConversationInSupabase,
+  saveConversationToSupabase,
+  savePersonaToSupabase,
+} from '../services/supabaseService.js';
 
 interface AIAgentWorkspaceProps {
   conversations: AgentConversation[];
@@ -32,14 +38,54 @@ interface AIAgentWorkspaceProps {
   onOpenSimulation: (simulationId: string) => void;
 }
 
-const SUGGESTED_PROMPTS = [
-  'What are the biggest customer concerns?',
-  'Which persona preferred Option A?',
-  'What should we improve?',
-  'Explain the simulation results.',
-  'Compare the pricing options.',
-  'What opportunities did we miss?',
+const STARTER_PROMPTS = [
+  {
+    category: 'Task Planning',
+    text: 'Help me build a step-by-step action plan and timeline for launching a new product.',
+  },
+  {
+    category: 'Decision Making',
+    text: 'Help me compare two strategic options and weigh the pros, cons, and risks.',
+  },
+  {
+    category: 'Problem Solving',
+    text: 'Help me diagnose why customers hesitate before converting and how to fix it.',
+  },
+  {
+    category: 'Open Strategy',
+    text: 'How should I structure pricing tiers so solo users and teams both see clear value?',
+  },
+  {
+    category: 'Simulation Insights',
+    text: 'Summarize the most important findings and recommendations from our workspace simulations.',
+  },
+  {
+    category: 'Audience Perspective',
+    text: 'What are the biggest concerns and decision factors across our target audience personas?',
+  },
 ];
+
+const FOLLOW_UP_CHIPS = [
+  'Turn this into a step-by-step action plan',
+  'Compare the pros, cons, and trade-offs',
+  'What risks or blind spots should I watch out for?',
+  'Give me a concrete example of how to apply this',
+];
+
+function formatDisplayMessage(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/^\[Custom Audience & Context Note:[^\]]*\]\s*/i, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/\[Simulated Persona Statement\]\s*/gi, '')
+    .replace(/\[Simulated [^\]]*Perspective\]:?\s*/gi, '')
+    .replace(/^\s*#{1,6}\s+/gm, '')
+    .replace(/^(\s*)\*\s+/gm, '$1- ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/\*\*/g, '')
+    .trim();
+}
 
 export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   conversations,
@@ -56,7 +102,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
     conversations[0]?.id || null
   );
   const [selectedSimId, setSelectedSimId] = useState<string>(
-    initialSimulationId || simulations[0]?.id || ''
+    initialSimulationId || ''
   );
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(
     initialPersonaId || ''
@@ -113,10 +159,10 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           segment: newAudienceSegment.trim() || 'Custom Defined Audience',
           tagline:
             newAudienceDescription.trim() ||
-            `Custom target audience defined inside the AI Research Agent.`,
+            `Custom target audience defined inside the AI Assistant.`,
           description:
             newAudienceDescription.trim() ||
-            `Custom target audience defined inside the AI Research Agent.`,
+            `Custom target audience defined inside the AI Assistant.`,
           avatarCode: newAudienceName.trim().slice(0, 2).toUpperCase(),
           tags: ['Custom Audience', newAudienceSegment.trim() || 'Target Segment'],
           context:
@@ -126,6 +172,16 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user && data.persona) {
+          await savePersonaToSupabase(
+            session.user.id,
+            data.persona.workspaceId || 'ws-default',
+            data.persona
+          ).catch(() => null);
+        }
         if (onPersonasChanged) onPersonasChanged();
         if (data.persona?.id) {
           setSelectedPersonaId(data.persona.id);
@@ -150,16 +206,26 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         },
         body: JSON.stringify({
           title: activePersona
-            ? `Persona Interview: ${activePersona.name}`
+            ? `Audience Session: ${activePersona.name}`
             : activeSimulation
-            ? `Analysis: ${activeSimulation.name.slice(0, 36)}`
-            : 'New Research Conversation',
+            ? `Study Discussion: ${activeSimulation.name.slice(0, 34)}`
+            : 'Personal Assistant Session',
           simulationId: selectedSimId || null,
           personaId: selectedPersonaId || null,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user && data.conversation) {
+          await saveConversationToSupabase(
+            session.user.id,
+            data.conversation.workspaceId,
+            data.conversation
+          ).catch(() => null);
+        }
         onConversationsChanged();
         setActiveConvId(data.conversation.id);
       }
@@ -176,6 +242,17 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         headers: { Authorization: `Bearer ${authToken}` },
       });
       if (res.ok) {
+        const data = await res.json();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user && data.conversation) {
+          await saveConversationToSupabase(
+            session.user.id,
+            data.conversation.workspaceId,
+            data.conversation
+          ).catch(() => null);
+        }
         onConversationsChanged();
       }
     } catch {
@@ -185,6 +262,12 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
   const handleDeleteConversation = async (id: string) => {
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        await deleteConversationInSupabase(session.user.id, id).catch(() => false);
+      }
       const res = await fetch(`/api/agent/conversations/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${authToken}` },
@@ -207,10 +290,6 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
     if (!promptText) setInputMessage('');
     setSending(true);
 
-    const contextualizedMessage = customAudienceContextNote.trim()
-      ? `[Custom Audience & Context Note: ${customAudienceContextNote.trim()}]\n${rawText}`
-      : rawText;
-
     try {
       const res = await fetch('/api/agent/message', {
         method: 'POST',
@@ -222,12 +301,23 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           conversationId: activeConv?.id || null,
           simulationId: selectedSimId || null,
           personaId: selectedPersonaId || null,
-          message: contextualizedMessage,
+          message: rawText,
+          customContextNote: customAudienceContextNote.trim() || undefined,
           webSearch: webSearchEnabled,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user && data.conversation) {
+          await saveConversationToSupabase(
+            session.user.id,
+            data.conversation.workspaceId,
+            data.conversation
+          ).catch(() => null);
+        }
         onConversationsChanged();
         if (data.conversation?.id) {
           setActiveConvId(data.conversation.id);
@@ -239,7 +329,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   };
 
   const handleCopy = (id: string, content: string) => {
-    navigator.clipboard.writeText(content);
+    navigator.clipboard.writeText(formatDisplayMessage(content));
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -247,11 +337,11 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 border border-[#E5E7EB] rounded-lg bg-white overflow-hidden min-h-[76vh]">
       {/* Left Panel: Context & Agents Selectors + Conversation History */}
-      <div className="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-[#E5E7EB] bg-[#F9FAFB] p-4 flex flex-col justify-between">
+      <div className="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-[#E5E7EB] bg-[#F9FAFB] p-4 flex flex-col justify-between max-h-[76vh] overflow-y-auto">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-[#111827] tracking-wide">
-              CONTEXT &amp; AGENTS
+              ASSISTANT &amp; CONTEXT
             </h2>
             <button
               type="button"
@@ -267,17 +357,17 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           <div>
             <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#111827] mb-1">
               <Layers className="w-3.5 h-3.5" />
-              <span>Simulation Context</span>
+              <span>Conversation Mode / Context</span>
             </label>
             <select
               value={selectedSimId}
               onChange={(e) => setSelectedSimId(e.target.value)}
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md text-[#111827] focus:outline-none focus:border-[#000000]"
             >
-              <option value="">All Workspace Context</option>
+              <option value="">Open Personal Assistant (Any Topic)</option>
               {simulations.map((sim) => (
                 <option key={sim.id} value={sim.id}>
-                  {sim.name}
+                  Simulation: {sim.name}
                 </option>
               ))}
             </select>
@@ -288,7 +378,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             <div className="flex items-center justify-between mb-1">
               <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#111827]">
                 <Users className="w-3.5 h-3.5" />
-                <span>Target Audience Agent</span>
+                <span>Audience Perspective (Optional)</span>
               </label>
               <button
                 type="button"
@@ -303,7 +393,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
               onChange={(e) => setSelectedPersonaId(e.target.value)}
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md text-[#111827] focus:outline-none focus:border-[#000000]"
             >
-              <option value="">All Selected Simulation Personas</option>
+              <option value="">Direct Assistant Voice (No Persona Filter)</option>
               {personas.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.segment})
@@ -368,7 +458,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           {/* Custom Context Override / Notes */}
           <div>
             <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">
-              Additional Custom Context (Optional)
+              Additional Context or Goal (Optional)
             </label>
             <input
               type="text"
@@ -376,6 +466,67 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
               onChange={(e) => setCustomAudienceContextNote(e.target.value)}
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md text-[#111827] focus:outline-none focus:border-[#000000]"
             />
+          </div>
+
+          {/* Conversation History List */}
+          <div className="pt-3 border-t border-[#E5E7EB]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono font-semibold text-[#6B7280] tracking-wider">
+                CONVERSATIONS ({conversations.length})
+              </span>
+              {activeConv && activeConv.messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleResetConversation}
+                  className="inline-flex items-center gap-1 text-[10px] text-[#6B7280] hover:text-[#111827] cursor-pointer"
+                  title="Clear messages in current conversation"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1 max-h-56 overflow-y-auto">
+              {conversations.length === 0 ? (
+                <p className="text-[11px] text-[#6B7280] py-1">
+                  Send any message to start your first conversation.
+                </p>
+              ) : (
+                conversations.map((conv) => {
+                  const isSelected = conv.id === activeConv?.id;
+                  return (
+                    <div
+                      key={conv.id}
+                      className={`group flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-md text-xs transition-colors ${
+                        isSelected
+                          ? 'bg-[#000000] text-white font-semibold'
+                          : 'bg-white border border-[#E5E7EB] text-[#111827] hover:border-[#000000]'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setActiveConvId(conv.id)}
+                        className="flex items-center gap-2 truncate text-left flex-1 cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{conv.title || 'Conversation'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteConversation(conv.id)}
+                        className={`opacity-0 group-hover:opacity-100 cursor-pointer shrink-0 ${
+                          isSelected ? 'text-gray-300 hover:text-white' : 'text-[#6B7280] hover:text-red-600'
+                        }`}
+                        title="Delete conversation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -391,25 +542,42 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <Bot className="w-4 h-4 text-[#111827] shrink-0" />
             <span className="text-xs font-semibold text-[#111827] truncate">
-              {activeConv?.title || 'Clamir AI Research Agent'}
+              {activeConv?.title || 'Clamir Personal AI Assistant'}
             </span>
-            {activePersona && (
+            {activePersona ? (
               <span className="text-xs font-mono text-[#6B7280]">
-                · Audience: {activePersona.name}
+                · Perspective: {activePersona.name}
+              </span>
+            ) : activeSimulation ? (
+              <span className="text-xs font-mono text-[#6B7280]">
+                · Study: {activeSimulation.name}
+              </span>
+            ) : (
+              <span className="text-xs font-mono text-[#6B7280]">
+                · Open Conversation, Planning &amp; Strategy
               </span>
             )}
           </div>
 
-          {activeSimulation && (
+          <div className="flex items-center gap-3">
+            {activeSimulation && (
+              <button
+                type="button"
+                onClick={() => onOpenSimulation(activeSimulation.id)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-[#111827] hover:underline cursor-pointer shrink-0"
+              >
+                <span>Open Simulation</span>
+                <ExternalLink className="w-3 h-3" />
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => onOpenSimulation(activeSimulation.id)}
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#111827] hover:underline cursor-pointer shrink-0"
+              onClick={() => setShowRightContext(!showRightContext)}
+              className="hidden lg:inline-flex text-[11px] font-mono text-[#6B7280] hover:text-[#111827] cursor-pointer"
             >
-              <span>Open Related Simulation</span>
-              <ExternalLink className="w-3 h-3" />
+              {showRightContext ? 'Hide Panel' : 'Show Panel'}
             </button>
-          )}
+          </div>
         </div>
 
         {/* Messages Stream */}
@@ -418,113 +586,146 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             <div className="h-full flex flex-col justify-center max-w-xl mx-auto space-y-5">
               <div className="text-center space-y-1.5">
                 <h3 className="text-base font-bold text-[#111827]">
-                  Interrogate Simulation Context &amp; Audience Agents
+                  Your Personal AI Assistant &amp; Strategic Partner
                 </h3>
-                <p className="text-xs text-[#6B7280]">
-                  Ask questions about{' '}
+                <p className="text-xs text-[#6B7280] leading-relaxed">
+                  Ask anything—plan tasks and projects, work through complex problems and decisions, brainstorm ideas, or analyze{' '}
                   <strong className="text-[#111827]">
-                    {activeSimulation ? activeSimulation.name : 'your workspace simulations'}
+                    {activeSimulation ? activeSimulation.name : 'your audience simulations'}
                   </strong>
-                  {activePersona ? ` or interview ${activePersona.name} directly` : ''}. Enable Web Search in the composer to ground responses with live external market sources.
+                  {activePersona ? ` with ${activePersona.name}` : ''}.
                 </p>
               </div>
 
               <div>
                 <span className="block text-[11px] font-mono text-[#6B7280] mb-2 text-center">
-                  SUGGESTED STARTER PROMPTS
+                  CONVERSATION STARTERS
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {SUGGESTED_PROMPTS.map((prompt) => (
+                  {STARTER_PROMPTS.map((item) => (
                     <button
-                      key={prompt}
+                      key={item.text}
                       type="button"
-                      onClick={() => handleSendMessage(prompt)}
-                      className="p-3 text-left text-xs font-medium text-[#111827] bg-[#F9FAFB] border border-[#E5E7EB] rounded-md hover:border-[#000000] transition-colors cursor-pointer"
+                      onClick={() => handleSendMessage(item.text)}
+                      className="p-3 text-left bg-[#F9FAFB] border border-[#E5E7EB] rounded-md hover:border-[#000000] transition-colors cursor-pointer space-y-1"
                     >
-                      {prompt}
+                      <span className="block text-[10px] font-mono font-semibold text-[#6B7280] uppercase">
+                        {item.category}
+                      </span>
+                      <span className="block text-xs font-medium text-[#111827]">
+                        {item.text}
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
             </div>
           ) : (
-            activeConv.messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex flex-col ${
-                  msg.role === 'user' ? 'items-end' : 'items-start'
-                }`}
-              >
-                <div
-                  className={`max-w-2xl rounded-lg p-4 text-xs sm:text-sm leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-[#000000] text-white'
-                      : 'bg-[#F9FAFB] text-[#111827] border border-[#E5E7EB]'
-                  }`}
-                >
-                  {msg.role === 'assistant' && (
-                    <div className="flex items-center justify-between gap-4 pb-2 mb-2 border-b border-[#E5E7EB] text-[11px] font-mono text-[#6B7280]">
-                      <span>
-                        Clamir AI Agent ·{' '}
-                        {msg.webSearchUsed
-                          ? 'Grounded Web Search + Simulated Audience Context'
-                          : 'Simulated Audience Context'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(msg.id, msg.content)}
-                        className="inline-flex items-center gap-1 text-[#111827] hover:underline cursor-pointer"
-                      >
-                        {copiedId === msg.id ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            <span>Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
+            <>
+              {activeConv.messages.map((msg) => {
+                const cleanContent = formatDisplayMessage(msg.content);
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex flex-col ${
+                      msg.role === 'user' ? 'items-end' : 'items-start'
+                    }`}
+                  >
+                    <div
+                      className={`max-w-2xl rounded-lg p-4 text-xs sm:text-sm leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-[#000000] text-white'
+                          : 'bg-[#F9FAFB] text-[#111827] border border-[#E5E7EB]'
+                      }`}
+                    >
+                      {msg.role === 'assistant' && (
+                        <div className="flex items-center justify-between gap-4 pb-2 mb-2 border-b border-[#E5E7EB] text-[11px] font-mono text-[#6B7280]">
+                          <span>
+                            Clamir Assistant
+                            {msg.webSearchUsed ? ' · Live Web Research' : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(msg.id, cleanContent)}
+                            className="inline-flex items-center gap-1 text-[#111827] hover:underline cursor-pointer"
+                          >
+                            {copiedId === msg.id ? (
+                              <>
+                                <Check className="w-3 h-3" />
+                                <span>Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
 
-                  <div className="whitespace-pre-line">{msg.content}</div>
+                      <div className="whitespace-pre-line">{cleanContent}</div>
 
-                  {/* Web Search Citations when present */}
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-[#E5E7EB] space-y-1.5">
-                      <span className="block text-[11px] font-mono font-semibold text-[#111827]">
-                        Verified External Web Sources (Distinguished from Simulated Persona Opinions):
-                      </span>
-                      <ul className="space-y-1">
-                        {msg.sources.map((src, idx) => (
-                          <li key={idx} className="text-xs">
-                            <a
-                              href={src.uri}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[#111827] underline hover:text-[#6B7280]"
-                            >
-                              <span>[{idx + 1}] {src.title || src.uri}</span>
-                              <ExternalLink className="w-3 h-3 shrink-0" />
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
+                      {/* Web Search Citations when present */}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-[#E5E7EB] space-y-1.5">
+                          <span className="block text-[11px] font-mono font-semibold text-[#111827]">
+                            Referenced Web Sources:
+                          </span>
+                          <ul className="space-y-1">
+                            {msg.sources.map((src, idx) => (
+                              <li key={idx} className="text-xs">
+                                <a
+                                  href={src.uri}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[#111827] underline hover:text-[#6B7280]"
+                                >
+                                  <span>
+                                    [{idx + 1}] {src.title || src.uri}
+                                  </span>
+                                  <ExternalLink className="w-3 h-3 shrink-0" />
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <span className="mt-1 text-[10px] font-mono text-[#6B7280]">
-                  {new Date(msg.timestamp).toLocaleTimeString()}
-                </span>
-              </div>
-            ))
+                    <span className="mt-1 text-[10px] font-mono text-[#6B7280]">
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Interactive Follow-Up Suggestions */}
+              {!sending &&
+                activeConv.messages.length > 0 &&
+                activeConv.messages[activeConv.messages.length - 1]?.role === 'assistant' && (
+                  <div className="pt-2">
+                    <span className="block text-[10px] font-mono text-[#6B7280] mb-1.5">
+                      CONTINUE THIS CONVERSATION
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FOLLOW_UP_CHIPS.map((chip) => (
+                        <button
+                          key={chip}
+                          type="button"
+                          onClick={() => handleSendMessage(chip)}
+                          className="px-2.5 py-1 text-xs bg-white border border-[#E5E7EB] rounded-md text-[#111827] hover:border-[#000000] transition-colors cursor-pointer"
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </>
           )}
           {sending && (
             <div className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-xs text-[#6B7280] max-w-md font-mono">
-              Synthesizing response{webSearchEnabled ? ' with live Google Search grounding' : ''}...
+              Thinking{webSearchEnabled ? ' and searching live web sources' : ''}...
             </div>
           )}
           <div ref={messagesEndRef} />
@@ -557,7 +758,6 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              {/* Web Search Toggle Inside Composer */}
               <button
                 type="button"
                 onClick={() => setWebSearchEnabled(!webSearchEnabled)}
@@ -568,11 +768,13 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 }`}
               >
                 <Globe className="w-3.5 h-3.5" />
-                <span>Web Search: {webSearchEnabled ? 'Enabled (Live Citations)' : 'Off (Simulation Context Only)'}</span>
+                <span>
+                  Web Search: {webSearchEnabled ? 'On (Live Web Sources)' : 'Off'}
+                </span>
               </button>
 
               <span className="text-[11px] text-[#6B7280]">
-                Persona outputs are simulated feedback · External web facts are cited separately
+                Ask about any topic, plan tasks, solve problems, or analyze simulations
               </span>
             </div>
           </form>
@@ -583,13 +785,13 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
       {showRightContext && (
         <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-[#E5E7EB] bg-[#F9FAFB] p-4 space-y-4 overflow-y-auto max-h-[76vh]">
           <h3 className="text-xs font-bold text-[#111827] tracking-wide border-b border-[#E5E7EB] pb-2">
-            ACTIVE CONTEXT &amp; AGENTS
+            ACTIVE CONTEXT
           </h3>
 
           {activeSimulation ? (
             <div className="space-y-3 text-xs">
               <div>
-                <span className="text-[#6B7280] block text-[11px]">Selected Simulation Context</span>
+                <span className="text-[#6B7280] block text-[11px]">Selected Simulation</span>
                 <p className="font-semibold text-[#111827] mt-0.5">{activeSimulation.name}</p>
               </div>
 
@@ -607,7 +809,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 <>
                   <div className="p-3 bg-white border border-[#E5E7EB] rounded-md space-y-1.5 font-mono tabular-nums">
                     <span className="font-sans font-semibold text-[#111827] block">
-                      Simulated Sentiment
+                      Audience Sentiment
                     </span>
                     <div className="flex justify-between text-[11px]">
                       <span>Positive: {activeSimulation.results.sentimentOverview.positive}%</span>
@@ -618,7 +820,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
                   <div>
                     <span className="text-[#6B7280] block text-[11px] mb-1">
-                      Agents in Simulation ({activeSimulation.results.personaBreakdown.length})
+                      Evaluated Personas ({activeSimulation.results.personaBreakdown.length})
                     </span>
                     <div className="space-y-1.5">
                       {activeSimulation.results.personaBreakdown.map((pb) => (
@@ -640,23 +842,53 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 </>
               )}
 
-              <button
-                type="button"
-                onClick={() => onOpenSimulation(activeSimulation.id)}
-                className="w-full py-2 px-3 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-gray-100 cursor-pointer"
-              >
-                Open Full Simulation Report
-              </button>
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenSimulation(activeSimulation.id)}
+                  className="w-full py-2 px-3 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-gray-100 cursor-pointer"
+                >
+                  Open Full Simulation Report
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSimId('')}
+                  className="w-full py-1.5 px-3 text-[11px] text-[#6B7280] hover:text-[#111827] cursor-pointer"
+                >
+                  Switch to General Assistant Mode
+                </button>
+              </div>
             </div>
           ) : (
-            <p className="text-xs text-[#6B7280]">
-              Select a simulation on the left to inspect its hypothesis, audience agent scores, and executive summary here.
-            </p>
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-white border border-[#E5E7EB] rounded-md space-y-1.5">
+                <span className="font-semibold text-[#111827] block">
+                  Personal Assistant Mode Active
+                </span>
+                <p className="text-[#6B7280] leading-relaxed">
+                  You can converse naturally about any topic, plan tasks and projects, evaluate decisions, or solve problems.
+                </p>
+              </div>
+              <p className="text-[11px] text-[#6B7280]">
+                Want to focus on a specific study? Select any simulation or audience persona from the dropdowns on the left.
+              </p>
+            </div>
           )}
 
           {activePersona && (
             <div className="pt-4 border-t border-[#E5E7EB] space-y-2 text-xs">
-              <span className="text-[11px] font-mono text-[#6B7280] block">ACTIVE AUDIENCE AGENT</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-mono text-[#6B7280] block">
+                  ACTIVE AUDIENCE PERSPECTIVE
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPersonaId('')}
+                  className="text-[10px] text-[#6B7280] hover:text-[#111827] underline cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
               <p className="font-bold text-[#111827]">{activePersona.name}</p>
               <p className="text-[#6B7280]">{activePersona.tagline}</p>
               <p className="text-[11px] text-[#111827]">Context: {activePersona.context}</p>

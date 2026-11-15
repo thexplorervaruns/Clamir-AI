@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Check,
   Download,
@@ -21,6 +21,7 @@ import {
 import { exportSimulationReport } from '../utils/reportExporter.ts';
 import {
   deleteReportInSupabase,
+  normalizeConsistentUserName,
   updateProfileInSupabase,
 } from '../services/supabaseService.js';
 
@@ -58,10 +59,17 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
   const [subTab, setSubTab] = useState<'profile' | 'reports' | 'activity' | 'owner'>(
     initialSubTab
   );
-  const [profileName, setProfileName] = useState('');
-  const [profileEmail, setProfileEmail] = useState('');
+  const [profileName, setProfileName] = useState(() =>
+    normalizeConsistentUserName(user.name, user.email)
+  );
+  const [profileEmail, setProfileEmail] = useState(() => user.email || '');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    setProfileName(normalizeConsistentUserName(user.name, user.email));
+    setProfileEmail(user.email || '');
+  }, [user.id, user.name, user.email]);
 
   // Reports filter state
   const [reportSearch, setReportSearch] = useState('');
@@ -88,10 +96,13 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
     if (!profileName.trim()) return;
     setSavingProfile(true);
     setProfileMsg(null);
+    const nextEmail = profileEmail.trim() || user.email;
+    const nextName = normalizeConsistentUserName(profileName.trim(), nextEmail);
+    setProfileName(nextName);
     try {
       await updateProfileInSupabase(user.id, {
-        name: profileName.trim(),
-        email: profileEmail.trim() || user.email,
+        name: nextName,
+        email: nextEmail,
       }).catch(() => null);
       const res = await fetch('/api/account/profile', {
         method: 'PUT',
@@ -100,13 +111,16 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          name: profileName.trim(),
-          email: profileEmail.trim(),
+          name: nextName,
+          email: nextEmail,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        onUserUpdated(data.user);
+        onUserUpdated({
+          ...data.user,
+          name: normalizeConsistentUserName(data.user?.name || nextName, data.user?.email || nextEmail),
+        });
         setProfileMsg('Profile information updated.');
       } else {
         setProfileMsg(data.error || 'Could not update profile.');
@@ -302,6 +316,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 <label className="block font-semibold text-[#111827] mb-1">Full Name</label>
                 <input
                   type="text"
+                  name="clamir-account-fullname"
+                  autoComplete="off"
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
@@ -312,6 +328,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 <label className="block font-semibold text-[#111827] mb-1">Email Address</label>
                 <input
                   type="email"
+                  name="clamir-account-email"
+                  autoComplete="off"
                   value={profileEmail}
                   onChange={(e) => setProfileEmail(e.target.value)}
                   className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"

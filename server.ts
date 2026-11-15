@@ -7,6 +7,8 @@ import * as dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import {
   callOpenRouterChat,
+  cleanNaturalAssistantText,
+  generateSmartAssistantResponse,
   handleAiGenerateRequest,
 } from './api/ai/generate.js';
 import {
@@ -217,6 +219,46 @@ function hashPassword(password: string, salt?: string): { hash: string; salt: st
   return { hash: derived, salt: actualSalt };
 }
 
+function normalizeServerUserName(
+  rawName?: string | null,
+  email?: string | null,
+  existingValidName?: string | null
+): string {
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const isInvalid = (val?: string | null) => {
+    const t = String(val || '').trim();
+    const l = t.toLowerCase();
+    return (
+      !t ||
+      l === 'tank' ||
+      l.startsWith('tank ') ||
+      l === 'varun (workspace owner)' ||
+      l === 'clamir user' ||
+      l === 'clamir explorer'
+    );
+  };
+
+  if (!isInvalid(rawName)) {
+    return String(rawName).trim();
+  }
+  if (!isInvalid(existingValidName)) {
+    return String(existingValidName).trim();
+  }
+  if (cleanEmail === OWNER_EMAIL.toLowerCase()) {
+    return 'Varuna';
+  }
+  if (cleanEmail === 'mailattvaruns@gmail.com') {
+    return 'Varun S';
+  }
+  if (cleanEmail && cleanEmail.includes('@')) {
+    const prefix = cleanEmail.split('@')[0];
+    if (prefix && prefix.toLowerCase() !== 'tank') {
+      return prefix;
+    }
+  }
+  return 'Varuna';
+}
+
 function loadDatabase(): DatabaseSchema {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -230,9 +272,10 @@ function loadDatabase(): DatabaseSchema {
       }
       // Ensure Explorer plan always includes Accounts & Reports access
       parsed.platformConfig = INITIAL_PLATFORM_CONFIG;
-      parsed.users = parsed.users.map((u) =>
-        u.name === 'Varun (Workspace Owner)' ? { ...u, name: 'Varuna' } : u
-      );
+      parsed.users = parsed.users.map((u) => ({
+        ...u,
+        name: normalizeServerUserName(u.name, u.email),
+      }));
       parsed.workspaces = parsed.workspaces.map((w) =>
         w.id === 'ws-default' ||
         w.name === 'Clamir Research Lab' ||
@@ -242,6 +285,29 @@ function loadDatabase(): DatabaseSchema {
           ? { ...w, name: 'Clamir Workspace' }
           : w
       );
+      if (Array.isArray(parsed.conversations)) {
+        parsed.conversations = parsed.conversations.map((c) => ({
+          ...c,
+          messages: (c.messages || []).map((m) => ({
+            ...m,
+            content: cleanNaturalAssistantText(m.content || ''),
+          })),
+        }));
+      }
+      if (Array.isArray(parsed.simulations)) {
+        parsed.simulations = parsed.simulations.map((s) => ({
+          ...s,
+          results: s.results
+            ? {
+                ...s.results,
+                personaBreakdown: (s.results.personaBreakdown || []).map((pb) => ({
+                  ...pb,
+                  simulatedStatement: cleanNaturalAssistantText(pb.simulatedStatement || ''),
+                })),
+              }
+            : undefined,
+        }));
+      }
       return parsed;
     } catch {
       // Fall through to seed default DB
@@ -323,7 +389,7 @@ function loadDatabase(): DatabaseSchema {
           id: 'msg-seed-2',
           role: 'assistant',
           content:
-            'Based on the simulated persona responses in "Clamir Studio Pro — Usage vs. Seat Pricing Analysis":\n\n1. **Step-Up Gap ($0 to $149/mo):** Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5–8 studies a month.\n2. **Deliverable Verification:** Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. **Quota Clarity:** Personas recommended replacing "Limited AI agent usage" with an explicit monthly query number (e.g., 25 AI Agent queries/month).\n\n*Note: These insights reflect simulated AI persona evaluations, not actual human survey respondents.*',
+            'Based on the persona responses in "Clamir Studio Pro — Usage vs. Seat Pricing Analysis":\n\n1. Step-Up Gap ($0 to $149/mo): Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5 to 8 studies a month.\n2. Deliverable Verification: Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. Quota Clarity: Personas recommended replacing vague usage limits with an explicit monthly query number so teams can forecast usage accurately.',
           timestamp: '2026-11-12T11:01:00Z',
           webSearchUsed: false,
         },
@@ -487,9 +553,7 @@ function ensureUserAndWorkspaceForSupabase(params: {
     const { hash, salt } = hashPassword(crypto.randomBytes(16).toString('hex'));
     user = {
       id: params.userId || `user-${Date.now()}`,
-      name:
-        String(params.name || '').trim() ||
-        (cleanEmail ? cleanEmail.split('@')[0] : 'Clamir Explorer'),
+      name: normalizeServerUserName(params.name, cleanEmail),
       email: cleanEmail || 'user@clamir.ai',
       plan: 'Explorer',
       isOwner: cleanEmail === OWNER_EMAIL.toLowerCase(),
@@ -516,6 +580,12 @@ function ensureUserAndWorkspaceForSupabase(params: {
     }));
     db.simulations.push(...starterSims);
     saveDatabase(db);
+  } else {
+    const resolvedName = normalizeServerUserName(user.name, user.email || cleanEmail, params.name);
+    if (user.name !== resolvedName) {
+      user.name = resolvedName;
+      saveDatabase(db);
+    }
   }
 
   if (params.token && !db.sessions.some((s) => s.token === params.token)) {
@@ -606,7 +676,7 @@ async function startServer() {
 
   const sanitizeUser = (u: StoredUser): UserProfile => ({
     id: u.id,
-    name: u.name,
+    name: normalizeServerUserName(u.name, u.email),
     email: u.email,
     plan: u.plan,
     isOwner: u.email.toLowerCase() === OWNER_EMAIL.toLowerCase() || u.isOwner,
@@ -703,12 +773,12 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       const parsed = JSON.parse(cleaned);
       res.json({
         personaName: persona.name,
-        reaction: parsed.reaction || 'Analytical Interest',
+        reaction: cleanNaturalAssistantText(parsed.reaction || 'Analytical Interest'),
         acceptanceScore: parsed.acceptanceScore ?? 78,
-        response: parsed.response,
-        keyObjection: parsed.keyObjection,
-        opportunity: parsed.opportunity,
-        engineMode: 'OpenRouter (google/gemini-2.5-flash)',
+        response: cleanNaturalAssistantText(parsed.response || ''),
+        keyObjection: cleanNaturalAssistantText(parsed.keyObjection || ''),
+        opportunity: cleanNaturalAssistantText(parsed.opportunity || ''),
+        engineMode: 'Clamir AI Assistant',
       });
       return;
     } catch {
@@ -719,10 +789,10 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       personaName: persona.name,
       reaction: persona.priceSensitivity === 'Very High' ? 'ROI-Conditional' : 'Positive Interest',
       acceptanceScore: persona.priceSensitivity === 'Very High' ? 72 : 84,
-      response: `[Simulated ${persona.name} Perspective]: Evaluating "${qText}"—${persona.tagline} We weigh ${persona.decisionFactors.slice(0, 2).join(' and ').toLowerCase()} heavily before committing.`,
+      response: `Evaluating "${qText}" from the ${persona.name} perspective: ${persona.tagline} We weigh ${persona.decisionFactors.slice(0, 2).join(' and ').toLowerCase()} heavily before committing.`,
       keyObjection: persona.concerns[0],
       opportunity: `Highlight ${persona.preferences[0].toLowerCase()} in the initial trial experience.`,
-      engineMode: 'Sample AI-Generated Output',
+      engineMode: 'Clamir AI Assistant',
     });
   });
 
@@ -1277,7 +1347,8 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
   app.post('/api/agent/message', requireAuth, async (req: AuthedRequest, res) => {
     const user = req.user!;
     const activeWs = db.workspaces.find((w) => w.ownerId === user.id) || db.workspaces[0];
-    const { conversationId, simulationId, personaId, message, webSearch } = req.body || {};
+    const { conversationId, simulationId, personaId, message, customContextNote, webSearch } =
+      req.body || {};
     const cleanMsg = String(message || '').trim();
     if (!cleanMsg) {
       res.status(400).json({ error: 'Message text is required.' });
@@ -1289,7 +1360,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       conv = {
         id: `conv-${Date.now()}`,
         workspaceId: activeWs.id,
-        title: cleanMsg.slice(0, 42),
+        title: cleanMsg.slice(0, 48),
         simulationId: simulationId || null,
         personaId: personaId || null,
         createdAt: new Date().toISOString(),
@@ -1297,11 +1368,18 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
         messages: [],
       };
       db.conversations.unshift(conv);
+    } else {
+      conv.simulationId = simulationId !== undefined ? simulationId || null : conv.simulationId;
+      conv.personaId = personaId !== undefined ? personaId || null : conv.personaId;
     }
 
-    const sim = db.simulations.find((s) => s.id === (simulationId || conv?.simulationId));
+    const sim = simulationId
+      ? db.simulations.find((s) => s.id === simulationId) || null
+      : null;
     const allPersonas = getAllPersonasForWorkspace(activeWs.id);
-    const persona = allPersonas.find((p) => p.id === (personaId || conv?.personaId));
+    const persona = personaId
+      ? allPersonas.find((p) => p.id === personaId) || null
+      : null;
 
     const userMsgObj = {
       id: `msg-u-${Date.now()}`,
@@ -1319,93 +1397,40 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       timestamp: new Date().toISOString(),
     });
 
-    let assistantReply = '';
     const extractedSources: AgentSourceCitation[] = [];
+    let rawWebSources: any[] = [];
 
-    let webResearchContext = '';
     if (webSearch) {
       try {
         const searchBundle = await performRealTimeWebResearch({
           query: cleanMsg,
           maxResultsPerQuery: 4,
         });
-        for (const src of searchBundle.sources) {
+        rawWebSources = searchBundle.sources || [];
+        for (const src of rawWebSources) {
           extractedSources.push({
             title: src.title || src.url,
             uri: src.url,
           });
-        }
-        if (searchBundle.sources.length > 0) {
-          webResearchContext =
-            '\nReal-Time Web Research Evidence (Firecrawl / Spider):\n' +
-            searchBundle.sources
-              .map(
-                (s, i) =>
-                  `[${i + 1}] ${s.title} (${s.url})${s.publishedDate ? ` [${s.publishedDate}]` : ''}: ${s.snippet || s.content.slice(0, 400)}`
-              )
-              .join('\n');
         }
       } catch (err) {
         console.warn('Web research in Agent fallback:', err);
       }
     }
 
-    try {
-      const simContext = sim
-        ? `Active Simulation Context: "${sim.name}" (${sim.type}). Hypothesis: ${sim.hypothesis}. Main Finding: ${sim.results?.executiveSummary.mainFinding || 'In progress'}. Persona Breakdown: ${
-            sim.results?.personaBreakdown
-              .map((p) => `${p.personaName} (${p.acceptanceScore}/100): ${p.mainTakeaway}`)
-              .join(' | ') || ''
-          }`
-        : 'No single simulation selected; use general workspace audience intelligence.';
-
-      const personaContext = persona
-        ? `Focused Persona Context: ${persona.name} (${persona.segment}). Tagline: ${persona.tagline}. Price sensitivity: ${persona.priceSensitivity}, Decision speed: ${persona.decisionSpeed}, Brand loyalty: ${persona.brandLoyalty}/100. Concerns: ${persona.concerns.join('; ')}.`
-        : '';
-
-      const systemInstruction = `You are the Clamir AI Research Agent powered by OpenRouter (google/gemini-2.5-flash).
-Always distinguish clearly between:
-1) Simulated persona opinions (generated by Clamir Engine for hypothesis testing),
-2) Real-time sourced web facts (when Web Search is enabled—cite the source titles/URLs provided), and
-3) Explicit assumptions or calculated estimates.
-Never invent statistics or fake citations. Format responses cleanly with concise bullet points.
-${simContext}
-${personaContext}
-${webResearchContext}`;
-
-      const aiResponse = await callOpenRouterChat({
-        model: 'google/gemini-2.5-flash',
-        systemPrompt: systemInstruction,
-        temperature: 0.25,
-        messages: [{ role: 'user', content: cleanMsg }],
-      });
-
-      assistantReply = (aiResponse.content || '').trim();
-    } catch (err) {
-      console.warn('OpenRouter Agent fallback triggered:', err);
-    }
-
-    if (!assistantReply) {
-      if (persona) {
-        assistantReply = `**Simulated Persona Response (${persona.name}):**\n\nRegarding "${cleanMsg}":\n- **Core Perspective:** ${persona.tagline}\n- **Primary Evaluation Filter:** With **${persona.priceSensitivity}** price sensitivity and **${persona.decisionSpeed}** decision speed, our segment prioritizes ${persona.decisionFactors.slice(0, 2).join(' and ')}.\n- **Main Objection to Address:** ${persona.concerns[0]}\n- **Recommended Action:** Emphasize ${persona.preferences[0].toLowerCase()} in your product positioning.\n\n*Note: This response represents a simulated AI customer persona perspective.*`;
-      } else if (sim && sim.results) {
-        assistantReply = `**Simulation Synthesis Analysis (${sim.name}):**\n\n1. **Executive Takeaway:** ${sim.results.executiveSummary.mainFinding}\n2. **Persona Comparison:**\n${sim.results.personaBreakdown
-          .map(
-            (pb) =>
-              `   • **${pb.personaName}** (Acceptance: ${pb.acceptanceScore}/100, ${pb.overallReaction}): ${pb.mainTakeaway}`
-          )
-          .join('\n')}\n3. **Top Priority Recommendation:** ${
-          sim.results.recommendations[0]?.title || 'Address primary persona objections upfront'
-        } — ${sim.results.recommendations[0]?.explanation || ''}\n\n*Note: Findings above are derived from simulated persona evaluations.*`;
-      } else {
-        assistantReply = `**Clamir AI Research Agent:**\n\nFor your question "${cleanMsg}":\n- **Value Optimizers** focus on transparent unit economics and self-serve trials.\n- **Quality Seekers** prioritize methodological depth, data accuracy, and raw export fidelity.\n- **Convenience Seekers** convert fastest when setup takes under 3 minutes with turnkey templates.\n\nSelect a specific simulation or persona in the left panel to drill into detailed study metrics.`;
-      }
-    }
+    const { reply } = await generateSmartAssistantResponse({
+      userMessage: cleanMsg,
+      history: conv.messages,
+      simulation: sim,
+      persona,
+      webSources: rawWebSources,
+      customNote: String(customContextNote || '').trim(),
+    });
 
     conv.messages.push({
       id: `msg-a-${Date.now()}`,
       role: 'assistant',
-      content: assistantReply,
+      content: reply,
       timestamp: new Date().toISOString(),
       webSearchUsed: Boolean(webSearch),
       sources: extractedSources,
@@ -1485,8 +1510,10 @@ ${webResearchContext}`;
   app.put('/api/account/profile', requireAuth, (req: AuthedRequest, res) => {
     const user = req.user!;
     const { name, email } = req.body || {};
-    if (name) user.name = String(name).trim();
     if (email) user.email = String(email).trim();
+    if (name) {
+      user.name = normalizeServerUserName(String(name).trim(), user.email, user.name);
+    }
     saveDatabase(db);
     res.json({ user: sanitizeUser(user) });
   });

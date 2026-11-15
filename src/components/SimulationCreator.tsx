@@ -27,6 +27,11 @@ import {
   SimulationTypeId,
 } from '../types/clamir.ts';
 import { SIMULATION_TYPES_META } from '../data/seedData.ts';
+import { supabase } from '../supabaseClient.js';
+import {
+  savePersonaToSupabase,
+  saveSimulationToSupabase,
+} from '../services/supabaseService.js';
 
 interface SimulationCreatorProps {
   initialType?: SimulationTypeId;
@@ -177,6 +182,16 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
       if (res.ok) {
         const data = await res.json();
         const created: Persona = data.persona;
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user) {
+          await savePersonaToSupabase(
+            session.user.id,
+            created.workspaceId || 'ws-default',
+            created
+          ).catch(() => null);
+        }
         if (onPersonasChanged) onPersonasChanged();
         setSelectedPersonas((prev) => [
           ...prev.filter((p) => p.personaId !== created.id),
@@ -482,6 +497,16 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
       if (!res.ok) {
         setError(data.error || 'Failed to launch simulation.');
       } else {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session?.user && data.simulation) {
+          await saveSimulationToSupabase(
+            session.user.id,
+            data.simulation.workspaceId,
+            data.simulation
+          ).catch(() => null);
+        }
         onSimulationStarted(data.simulation.id);
       }
     } catch {

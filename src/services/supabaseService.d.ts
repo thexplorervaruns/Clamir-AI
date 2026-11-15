@@ -9,6 +9,11 @@ import {
   Workspace,
 } from '../types/clamir.ts';
 
+export declare function normalizeConsistentUserName(
+  rawName?: string | null,
+  email?: string | null
+): string;
+
 export declare function signUpWithSupabase(params: {
   email: string;
   password: string;
@@ -111,3 +116,21 @@ export declare function updateProfileInSupabase(
   userId: string,
   params: { name?: string; email?: string; plan?: string }
 ): Promise<any>;
+
+export declare function toggleFavoritePersonaInSupabase(
+  userId: string,
+  workspaceId: string,
+  personaId: string
+): Promise<boolean>;
+
+export declare function saveConversationToSupabase(
+  userId: string,
+  workspaceId: string,
+  conv: Partial<AgentConversation>
+): Promise<AgentConversation | null>;
+
+export declare function deleteConversationInSupabase(
+  userId: string,
+  conversationId: string
+): Promise<boolean>;
+

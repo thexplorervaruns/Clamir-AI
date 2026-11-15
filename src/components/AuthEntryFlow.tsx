@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import { ClamirLogo } from './ClamirLogo.tsx';
+import { supabase } from '../supabaseClient.js';
 import { UserProfile, Workspace } from '../types/clamir.ts';
 
 interface AuthEntryFlowProps {
@@ -28,28 +29,89 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
 
   const validateEmail = (val: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
 
+  const syncSupabaseSessionWithWorkspace = async (
+    accessToken: string,
+    supaUser: { id: string; email?: string; user_metadata?: Record<string, any>; created_at?: string },
+    fallbackName?: string
+  ) => {
+    try {
+      const res = await fetch('/api/auth/supabase-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          userId: supaUser.id,
+          email: supaUser.email || email.trim(),
+          name:
+            fallbackName?.trim() ||
+            supaUser.user_metadata?.full_name ||
+            supaUser.email?.split('@')[0] ||
+            'Clamir User',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        window.history.pushState({}, '', '/');
+        onSuccess({
+          token: accessToken,
+          user: data.user,
+          workspaces: data.workspaces,
+        });
+        return;
+      }
+    } catch {
+      // Fallback to local profile object if backend sync is unreachable
+    }
+
+    const cleanEmail = supaUser.email || email.trim();
+    const fallbackUser: UserProfile = {
+      id: supaUser.id,
+      name:
+        fallbackName?.trim() ||
+        supaUser.user_metadata?.full_name ||
+        cleanEmail.split('@')[0] ||
+        'Clamir User',
+      email: cleanEmail,
+      plan: 'Explorer',
+      isOwner: cleanEmail.toLowerCase() === 'thexplorervaruns@gmail.com',
+      createdAt: supaUser.created_at || new Date().toISOString(),
+    };
+    const fallbackWs: Workspace = {
+      id: 'ws-default',
+      name: 'Clamir Workspace',
+      ownerId: supaUser.id,
+      createdAt: new Date().toISOString(),
+      role: 'Owner',
+    };
+    window.history.pushState({}, '', '/');
+    onSuccess({
+      token: accessToken,
+      user: fallbackUser,
+      workspaces: [fallbackWs],
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setInfoMessage(null);
 
+    const cleanEmail = email.trim();
+
     if (mode === 'forgot') {
-      if (!validateEmail(email.trim())) {
+      if (!validateEmail(cleanEmail)) {
         setError('Please enter a valid email address to reset your password.');
         return;
       }
       setLoading(true);
       try {
-        const res = await fetch('/api/auth/forgot-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: email.trim() }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || 'Unable to process password reset request.');
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+        if (resetError) {
+          setError(resetError.message || 'Unable to process password reset request.');
         } else {
-          setInfoMessage(data.message || 'Password reset instructions have been generated for your account.');
+          setInfoMessage('Password reset instructions have been sent to your email address.');
         }
       } catch {
         setError('Network error while requesting password reset.');
@@ -59,7 +121,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
       return;
     }
 
-    if (!validateEmail(email.trim())) {
+    if (!validateEmail(cleanEmail)) {
       setError('Please enter a valid email address.');
       return;
     }
@@ -70,37 +132,60 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
     }
 
     if (mode === 'signup') {
-      if (!name.trim()) {
-        setError('Please enter your full name.');
-        return;
-      }
-      if (password !== confirmPassword) {
+      if (confirmPassword && password !== confirmPassword) {
         setError('Passwords do not match. Please verify your confirmation password.');
         return;
       }
+
+      setLoading(true);
+      try {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+        });
+
+        if (signUpError) {
+          setError(signUpError.message || 'Sign up failed. Please check your details.');
+          return;
+        }
+
+        if (!data.session) {
+          setInfoMessage('Check your email and confirm your account before logging in.');
+          return;
+        }
+
+        if (data.user) {
+          await syncSupabaseSessionWithWorkspace(data.session.access_token, data.user, name);
+        }
+      } catch {
+        setError('Unable to reach Supabase authentication service. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+      return;
     }
 
+    // Sign In mode: supabase.auth.signInWithPassword({ email, password })
     setLoading(true);
     try {
-      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/signup';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          password,
-          rememberMe,
-        }),
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Authentication failed. Please check your credentials.');
-      } else {
-        onSuccess(data);
+
+      if (signInError) {
+        setError(signInError.message || 'Invalid login credentials. Please check your email and password.');
+        return;
       }
+
+      if (!data.session || !data.user) {
+        setError('Check your email and confirm your account before logging in.');
+        return;
+      }
+
+      await syncSupabaseSessionWithWorkspace(data.session.access_token, data.user, name);
     } catch {
-      setError('Unable to reach authentication server. Please try again.');
+      setError('Unable to reach Supabase authentication service. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -117,6 +202,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
       });
       const data = await res.json();
       if (res.ok) {
+        window.history.pushState({}, '', '/');
         onSuccess(data);
       } else {
         setError(data.error || 'Quick login failed.');
@@ -156,18 +242,6 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
           </p>
         </div>
 
-        {error && (
-          <div className="mt-5 p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
-            {error}
-          </div>
-        )}
-
-        {infoMessage && (
-          <div className="mt-5 p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs text-[#111827]">
-            {infoMessage}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === 'signup' && (
             <div>
@@ -180,7 +254,6 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Alex Rivera"
                   className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
@@ -197,7 +270,6 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
                 className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
               />
             </div>
@@ -214,7 +286,6 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
                   className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
                 <button
@@ -240,7 +311,6 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
                   className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
@@ -270,6 +340,18 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
               >
                 Forgot password?
               </button>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
+              {error}
+            </div>
+          )}
+
+          {infoMessage && (
+            <div className="p-3 bg-[#F9FAFB] border border-[#111827] rounded-md text-xs font-medium text-[#111827]">
+              {infoMessage}
             </div>
           )}
 
@@ -336,7 +418,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
       </div>
 
       <div className="text-center text-xs text-[#6B7280]">
-        Secured with scrypt salted password hashing · Workspace data isolated
+        Secured with Supabase Auth &amp; Row Level Security · Workspace data isolated
       </div>
     </div>
   );

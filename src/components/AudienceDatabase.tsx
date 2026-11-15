@@ -16,6 +16,11 @@ import {
   Persona,
   PriceSensitivity,
 } from '../types/clamir.ts';
+import { supabase } from '../supabaseClient.js';
+import {
+  deletePersonaInSupabase,
+  savePersonaToSupabase,
+} from '../services/supabaseService.js';
 
 interface AudienceDatabaseProps {
   personas: Persona[];
@@ -37,15 +42,14 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
   );
   const [editorMode, setEditorMode] = useState<null | 'create' | 'edit'>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [confirmDeleteBuiltInAll, setConfirmDeleteBuiltInAll] = useState(false);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Form state for create/edit
+  // Form state for create/edit — All text & numerical fields start empty
   const [formName, setFormName] = useState('');
   const [formTagline, setFormTagline] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formAvatarCode, setFormAvatarCode] = useState('CP');
+  const [formAvatarCode, setFormAvatarCode] = useState('');
   const [formSegment, setFormSegment] = useState('');
   const [formTags, setFormTags] = useState('');
   const [formCharacteristics, setFormCharacteristics] = useState('');
@@ -57,7 +61,7 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
   const [formContext, setFormContext] = useState('');
   const [formPriceSensitivity, setFormPriceSensitivity] = useState<PriceSensitivity>('Moderate');
   const [formDecisionSpeed, setFormDecisionSpeed] = useState<DecisionSpeed>('Deliberate');
-  const [formBrandLoyalty, setFormBrandLoyalty] = useState<number>(60);
+  const [formBrandLoyalty, setFormBrandLoyalty] = useState<string>('');
 
   const builtInCount = personas.filter((p) => p.isBuiltIn).length;
   const customCount = personas.filter((p) => !p.isBuiltIn).length;
@@ -83,43 +87,24 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
   const selectedPersona =
     personas.find((p) => p.id === selectedPersonaId) || filteredPersonas[0] || null;
 
-  const openEditor = (mode: 'create' | 'edit', source?: Persona) => {
+  const openEditor = (mode: 'create' | 'edit', _source?: Persona) => {
     setEditorMode(mode);
-    if (mode === 'edit' && source) {
-      setFormName(source.name);
-      setFormTagline(source.tagline);
-      setFormDescription(source.description);
-      setFormAvatarCode(source.avatarCode);
-      setFormSegment(source.segment);
-      setFormTags(source.tags.join(', '));
-      setFormCharacteristics(source.characteristics.join('\n'));
-      setFormPreferences(source.preferences.join('\n'));
-      setFormMotivations(source.motivations.join('\n'));
-      setFormPurchasingBehavior(source.purchasingBehavior);
-      setFormDecisionFactors(source.decisionFactors.join('\n'));
-      setFormConcerns(source.concerns.join('\n'));
-      setFormContext(source.context);
-      setFormPriceSensitivity(source.priceSensitivity);
-      setFormDecisionSpeed(source.decisionSpeed);
-      setFormBrandLoyalty(source.brandLoyalty);
-    } else {
-      setFormName('');
-      setFormTagline('Pragmatic evaluator focused on clear workflow outcomes.');
-      setFormDescription('Custom target audience persona tailored for domain-specific simulations.');
-      setFormAvatarCode('CA');
-      setFormSegment('Custom Target Audience');
-      setFormTags('Custom Audience, Domain Buyer, Evaluator');
-      setFormCharacteristics('Evaluates product claims systematically\nCompares workflow integration fit');
-      setFormPreferences('Clear documentation\nPredictable pricing');
-      setFormMotivations('Improving team velocity\nReducing operational risk');
-      setFormPurchasingBehavior('Runs structured trial before team-wide rollout.');
-      setFormDecisionFactors('Integration speed\nTotal cost of ownership');
-      setFormConcerns('Migration downtime\nUnclear support SLA');
-      setFormContext('Evaluates B2B and consumer solutions across desktop and mobile touchpoints.');
-      setFormPriceSensitivity('Moderate');
-      setFormDecisionSpeed('Deliberate');
-      setFormBrandLoyalty(65);
-    }
+    setFormName('');
+    setFormTagline('');
+    setFormDescription('');
+    setFormAvatarCode('');
+    setFormSegment('');
+    setFormTags('');
+    setFormCharacteristics('');
+    setFormPreferences('');
+    setFormMotivations('');
+    setFormPurchasingBehavior('');
+    setFormDecisionFactors('');
+    setFormConcerns('');
+    setFormContext('');
+    setFormPriceSensitivity('Moderate');
+    setFormDecisionSpeed('Deliberate');
+    setFormBrandLoyalty('');
   };
 
   const handleSavePersona = async (e: React.FormEvent) => {
@@ -128,12 +113,17 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
     setSaving(true);
     setStatusMessage(null);
 
+    const parsedLoyalty =
+      formBrandLoyalty.trim() === ''
+        ? 0
+        : Math.max(0, Math.min(100, Number(formBrandLoyalty) || 0));
+
     const payload = {
       name: formName.trim(),
       tagline: formTagline.trim(),
       description: formDescription.trim(),
       avatarCode: (formAvatarCode.trim() || formName.slice(0, 2)).toUpperCase().slice(0, 3),
-      segment: formSegment.trim() || 'Custom Target Audience',
+      segment: formSegment.trim(),
       tags: formTags
         .split(',')
         .map((s) => s.trim())
@@ -162,11 +152,23 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
       context: formContext.trim(),
       priceSensitivity: formPriceSensitivity,
       decisionSpeed: formDecisionSpeed,
-      brandLoyalty: Math.max(0, Math.min(100, Number(formBrandLoyalty) || 0)),
+      brandLoyalty: parsedLoyalty,
     };
 
     try {
       const isEdit = editorMode === 'edit' && selectedPersona && !selectedPersona.isBuiltIn;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        await savePersonaToSupabase(
+          session.user.id,
+          selectedPersona?.workspaceId || 'ws-default',
+          payload,
+          isEdit ? selectedPersona?.id : null
+        ).catch(() => null);
+      }
+
       const url = isEdit ? `/api/personas/${selectedPersona.id}` : '/api/personas';
       const method = isEdit ? 'PUT' : 'POST';
       const res = await fetch(url, {
@@ -220,6 +222,16 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
 
   const handleDeletePersona = async (id: string) => {
     const target = personas.find((p) => p.id === id);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      await deletePersonaInSupabase(
+        session.user.id,
+        target?.workspaceId || 'ws-default',
+        id
+      ).catch(() => false);
+    }
     const res = await fetch(`/api/personas/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
@@ -233,22 +245,6 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
       onPersonasChanged();
       setStatusMessage(
         `Removed "${target?.name || 'Persona'}" from your workspace audience database.`
-      );
-    }
-  };
-
-  const handleDeleteAllBuiltInPersonas = async () => {
-    const res = await fetch('/api/personas/builtin/all', {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (res.ok) {
-      setConfirmDeleteBuiltInAll(false);
-      const remainingCustom = personas.filter((p) => !p.isBuiltIn);
-      setSelectedPersonaId(remainingCustom[0]?.id || null);
-      onPersonasChanged();
-      setStatusMessage(
-        'Built-in audience database deleted. You can now use exclusively custom-defined target audiences or restore built-in personas anytime.'
       );
     }
   };
@@ -279,23 +275,11 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
             Audience Database &amp; Custom Segments
           </h1>
           <p className="text-xs text-[#6B7280] mt-1 max-w-2xl">
-            Create and define your own target audiences, manage evaluation contexts, or delete the built-in persona database to run 100% custom audience simulations.
+            Create and define your own target audiences, manage evaluation contexts, or delete a selected audience from your workspace.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-center">
-          {builtInCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => setConfirmDeleteBuiltInAll(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors cursor-pointer"
-              title="Remove all built-in personas from this workspace"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Delete Built-in Database ({builtInCount})</span>
-            </button>
-          ) : null}
-
           {builtInCount < 7 && (
             <button
               type="button"
@@ -339,7 +323,6 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search target audiences by name, segment, context, or tag..."
             className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
           />
         </div>
@@ -669,7 +652,6 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     required
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="e.g., Independent FinTech Creators, Healthcare CIOs, Gen-Z Gamers"
                     className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -696,7 +678,6 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     type="text"
                     value={formSegment}
                     onChange={(e) => setFormSegment(e.target.value)}
-                    placeholder="e.g., B2C Subscription Consumers, Enterprise Security"
                     className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -743,7 +724,6 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                   type="text"
                   value={formContext}
                   onChange={(e) => setFormContext(e.target.value)}
-                  placeholder="Where and how this audience discovers, evaluates, and adopts products..."
                   className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                 />
               </div>
@@ -777,14 +757,14 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                 </div>
                 <div>
                   <label className="block font-semibold text-[#111827] mb-1">
-                    Brand Loyalty (0-100): {formBrandLoyalty}
+                    Brand Loyalty (0-100)
                   </label>
                   <input
                     type="number"
                     min={0}
                     max={100}
                     value={formBrandLoyalty}
-                    onChange={(e) => setFormBrandLoyalty(Number(e.target.value))}
+                    onChange={(e) => setFormBrandLoyalty(e.target.value)}
                     className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
                   />
                 </div>
@@ -906,37 +886,7 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                 onClick={() => handleDeletePersona(confirmDeleteId)}
                 className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 cursor-pointer"
               >
-                Delete from Database
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete All Built-in Personas Confirmation Dialog */}
-      {confirmDeleteBuiltInAll && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md bg-white border border-[#E5E7EB] rounded-lg p-6">
-            <h3 className="text-base font-bold text-[#111827]">
-              Delete Built-in Audience Database?
-            </h3>
-            <p className="mt-2 text-xs text-[#6B7280] leading-relaxed">
-              This removes all {builtInCount} built-in personas from your workspace so you can work exclusively with your own custom-defined audiences. All simulation contexts, reports, and custom personas will be preserved.
-            </p>
-            <div className="mt-5 flex justify-end gap-2.5">
-              <button
-                type="button"
-                onClick={() => setConfirmDeleteBuiltInAll(false)}
-                className="px-4 py-2 text-xs font-medium text-[#111827] border border-[#E5E7EB] rounded-md cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteAllBuiltInPersonas}
-                className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 cursor-pointer"
-              >
-                Delete Built-in Database
+                Delete Selected Audience
               </button>
             </div>
           </div>

@@ -96,9 +96,14 @@ export interface SelectedPersonaConfig {
 export type SimulationStage =
   | 'Queued'
   | 'Preparing'
+  | 'Preparing simulation'
+  | 'Searching the web'
+  | 'Analyzing sources'
+  | 'Verifying information'
   | 'Processing Responses'
   | 'Analyzing'
   | 'Generating Insights'
+  | 'Generating results'
   | 'Completed'
   | 'Stopped'
   | 'Failed';
@@ -149,10 +154,47 @@ export interface SimulationRecommendation {
   expectedImpact: string;
 }
 
+export interface StructuredSimulationReport {
+  simulationOverview?: string;
+  scenarioAndParameters?: string;
+  researchFindings?: string;
+  importantFactsAndEvidence?: {
+    claim: string;
+    classification: string;
+    sourceTitle: string;
+    sourceUrl?: string;
+  }[];
+  verificationSummary?: {
+    verifiedClaimsCount?: number;
+    conflictingInformationNotes?: string;
+    missingInformationAndLimitations?: string;
+  };
+  simulationMethodology?: string;
+  stepByStepResults?: string[];
+  relevantCalculations?: {
+    metric: string;
+    formula: string;
+    inputs: string;
+    output: string;
+  }[];
+  expectedOutcomes?: string;
+  risksAndLimitations?: string[];
+  sourcesAndReferences?: {
+    title: string;
+    url: string;
+    publishedDate?: string | null;
+    authorityTier?: string;
+    provider?: string;
+    excerpt?: string;
+  }[];
+  finalConclusion?: string;
+}
+
 export interface SimulationResults {
   simulationNotice: string;
-  aiEngineMode: 'gemini-live' | 'simulated-engine';
+  aiEngineMode: 'openrouter-gemini-2.5-flash' | 'openrouter-live' | 'simulated-engine';
   generatedAt: string;
+  structuredSimulationReport?: StructuredSimulationReport;
   executiveSummary: {
     mainFinding: string;
     overallReaction: string;
@@ -197,10 +239,12 @@ export interface Simulation {
   researchObjectives: string;
   // Type-specific fields
   typeSpecificData: {
-    // A/B Testing
+    // A/B Testing & General Manual Notes
     optionADescription?: string;
     optionBDescription?: string;
     comparisonCriteria?: string;
+    processNotes?: string;
+    resultsNotes?: string;
     // Market Exploration
     marketOrIndustry?: string;
     productOrService?: string;

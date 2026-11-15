@@ -1,0 +1,569 @@
+import { supabase } from "../supabaseClient.js";
+import { BUILT_IN_PERSONAS } from "../data/seedData.ts";
+
+const OWNER_EMAIL = "thexplorervaruns@gmail.com";
+
+// ---------------------------------------------------------------------------
+// 1. SUPABASE AUTHENTICATION HELPERS
+// ---------------------------------------------------------------------------
+export async function signUpWithSupabase({ email, password, name = "" }) {
+  const { data, error } = await supabase.auth.signUp({
+    email: String(email).trim(),
+    password: String(password),
+    options: {
+      data: {
+        full_name: String(name).trim() || String(email).split("@")[0],
+      },
+    },
+  });
+  return { data, error };
+}
+
+export async function signInWithSupabase({ email, password }) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: String(email).trim(),
+    password: String(password),
+  });
+  return { data, error };
+}
+
+export async function signOutFromSupabase() {
+  const { error } = await supabase.auth.signOut();
+  return { error };
+}
+
+export async function getSupabaseSession() {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+  return { session, error };
+}
+
+export function subscribeToAuthChanges(callback) {
+  return supabase.auth.onAuthStateChange((event, session) => {
+    callback(event, session);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// 2. ROW MAPPERS (Snake_Case DB Rows <-> CamelCase App Types)
+// ---------------------------------------------------------------------------
+function mapWorkspaceRow(row) {
+  return {
+    id: row.id,
+    name: row.name || "Clamir Workspace",
+    ownerId: row.user_id,
+    createdAt: row.created_at || new Date().toISOString(),
+    role: row.role || "Owner",
+    favoritePersonaIds: Array.isArray(row.favorite_persona_ids)
+      ? row.favorite_persona_ids
+      : [],
+    deletedBuiltInPersonaIds: Array.isArray(row.deleted_builtin_persona_ids)
+      ? row.deleted_builtin_persona_ids
+      : [],
+  };
+}
+
+function mapPersonaRow(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    tagline: row.tagline || "",
+    description: row.description || "",
+    avatarCode: row.avatar_code || "CA",
+    segment: row.segment || "Custom Segment",
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    characteristics: Array.isArray(row.characteristics) ? row.characteristics : [],
+    preferences: Array.isArray(row.preferences) ? row.preferences : [],
+    motivations: Array.isArray(row.motivations) ? row.motivations : [],
+    purchasingBehavior: row.purchasing_behavior || "",
+    decisionFactors: Array.isArray(row.decision_factors) ? row.decision_factors : [],
+    concerns: Array.isArray(row.concerns) ? row.concerns : [],
+    context: row.context || "",
+    priceSensitivity: row.price_sensitivity || "Moderate",
+    decisionSpeed: row.decision_speed || "Deliberate",
+    brandLoyalty: typeof row.brand_loyalty === "number" ? row.brand_loyalty : 60,
+    isBuiltIn: Boolean(row.is_built_in),
+    isFavorite: Boolean(row.is_favorite),
+    createdAt: row.created_at,
+  };
+}
+
+function mapSimulationRow(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    type: row.type || "test_idea",
+    description: row.description || "",
+    hypothesis: row.hypothesis || "",
+    researchContext: row.research_context || "",
+    targetAudience: row.target_audience || "",
+    researchObjectives: row.research_objectives || "",
+    typeSpecificData: row.type_specific_data || {},
+    materials: Array.isArray(row.materials) ? row.materials : [],
+    questions: Array.isArray(row.questions) ? row.questions : [],
+    selectedPersonas: Array.isArray(row.selected_personas) ? row.selected_personas : [],
+    status: row.status || "Active",
+    stage: row.stage || "Queued",
+    progress: typeof row.progress === "number" ? row.progress : 0,
+    startedAt: row.started_at || row.created_at || new Date().toISOString(),
+    completedAt: row.completed_at || undefined,
+    estimatedSecondsRemaining: row.estimated_seconds_remaining,
+    isSample: Boolean(row.is_sample),
+    results: row.results || undefined,
+  };
+}
+
+function mapConversationRow(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    title: row.title || "Research Conversation",
+    simulationId: row.simulation_id || null,
+    personaId: row.persona_id || null,
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    messages: Array.isArray(row.messages) ? row.messages : [],
+  };
+}
+
+function mapReportRow(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    simulationId: row.simulation_id,
+    simulationName: row.simulation_name,
+    title: row.title,
+    format: row.format || "PDF",
+    sizeLabel: row.size_label || "24 KB",
+    createdAt: row.created_at || new Date().toISOString(),
+    summarySnippet: row.summary_snippet || "",
+  };
+}
+
+function mapRecentSearchRow(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    query: row.query,
+    category: row.category || "Simulation",
+    targetId: row.target_id || undefined,
+    timestamp: row.timestamp || row.created_at || new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 3. USER PROFILE & WORKSPACE BOOTSTRAP IN SUPABASE
+// ---------------------------------------------------------------------------
+export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorkspaceId) {
+  if (!sessionUser || !sessionUser.id) return null;
+  const userId = sessionUser.id;
+  const email = sessionUser.email || "";
+  const defaultName =
+    sessionUser.user_metadata?.full_name ||
+    sessionUser.user_metadata?.name ||
+    (email.toLowerCase() === OWNER_EMAIL ? "Varuna" : email.split("@")[0] || "Clamir User");
+  const isOwner = email.toLowerCase() === OWNER_EMAIL;
+
+  // 1. Load or create user_profiles row
+  let userProfile = {
+    id: userId,
+    name: defaultName,
+    email,
+    plan: "Explorer",
+    isOwner,
+    createdAt: sessionUser.created_at || new Date().toISOString(),
+  };
+
+  const { data: profileRow, error: profileErr } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!profileErr && profileRow) {
+    userProfile = {
+      id: profileRow.id,
+      name: profileRow.name || defaultName,
+      email: profileRow.email || email,
+      plan: profileRow.plan || "Explorer",
+      isOwner: Boolean(profileRow.is_owner) || isOwner,
+      createdAt: profileRow.created_at || userProfile.createdAt,
+    };
+  } else if (!profileErr && !profileRow) {
+    const { data: insertedProfile } = await supabase
+      .from("user_profiles")
+      .insert({
+        id: userId,
+        user_id: userId,
+        name: defaultName,
+        email,
+        plan: "Explorer",
+        is_owner: isOwner,
+      })
+      .select("*")
+      .maybeSingle();
+
+    if (insertedProfile) {
+      userProfile = {
+        id: insertedProfile.id,
+        name: insertedProfile.name,
+        email: insertedProfile.email,
+        plan: insertedProfile.plan,
+        isOwner: Boolean(insertedProfile.is_owner) || isOwner,
+        createdAt: insertedProfile.created_at,
+      };
+    }
+  }
+
+  // 2. Load or create default workspace in public.workspaces
+  const { data: wsRows, error: wsError } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  // If Supabase tables have not yet been created via SQL editor, return null so backend API handles fallback seamlessly
+  if (wsError) {
+    return null;
+  }
+
+  let workspaces = (wsRows || []).map(mapWorkspaceRow);
+  if (workspaces.length === 0) {
+    const { data: createdWs, error: createWsErr } = await supabase
+      .from("workspaces")
+      .insert({
+        user_id: userId,
+        name: "Clamir Workspace",
+        role: "Owner",
+        favorite_persona_ids: [
+          "persona-experience-seekers",
+          "persona-value-optimizers",
+          "persona-quality-seekers",
+        ],
+        deleted_builtin_persona_ids: [],
+      })
+      .select("*")
+      .single();
+
+    if (createWsErr || !createdWs) {
+      return null;
+    }
+    workspaces = [mapWorkspaceRow(createdWs)];
+  }
+
+  const activeWs =
+    workspaces.find((w) => w.id === requestedWorkspaceId) || workspaces[0];
+  const wsId = activeWs.id;
+
+  // 3. Load workspace-scoped records in parallel with RLS enforcement
+  const [simRes, personaRes, convRes, repRes, searchRes] = await Promise.all([
+    supabase
+      .from("simulations")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("workspace_id", wsId)
+      .order("started_at", { ascending: false }),
+    supabase
+      .from("personas")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("workspace_id", wsId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("agent_conversations")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("workspace_id", wsId)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("reports")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("workspace_id", wsId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("recent_searches")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("workspace_id", wsId)
+      .order("timestamp", { ascending: false })
+      .limit(30),
+  ]);
+
+  const deletedBuiltIns = activeWs.deletedBuiltInPersonaIds || [];
+  const favIds = activeWs.favoritePersonaIds || [];
+
+  const activeBuiltIns = BUILT_IN_PERSONAS.filter(
+    (p) => !deletedBuiltIns.includes(p.id)
+  ).map((p) => ({
+    ...p,
+    isFavorite: favIds.includes(p.id),
+  }));
+
+  const customPersonas = (personaRes.data || []).map((row) => {
+    const mapped = mapPersonaRow(row);
+    return {
+      ...mapped,
+      isFavorite: mapped.isFavorite || favIds.includes(mapped.id),
+    };
+  });
+
+  return {
+    user: userProfile,
+    workspaces,
+    activeWorkspaceId: wsId,
+    simulations: (simRes.data || []).map(mapSimulationRow),
+    personas: [...activeBuiltIns, ...customPersonas],
+    conversations: (convRes.data || []).map(mapConversationRow),
+    reports: (repRes.data || []).map(mapReportRow),
+    recentSearches: (searchRes.data || []).map(mapRecentSearchRow),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 4. DIRECT SUPABASE CRUD OPERATIONS
+// ---------------------------------------------------------------------------
+export async function createWorkspaceInSupabase(userId, name) {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .insert({
+      user_id: userId,
+      name: String(name || "Clamir Workspace").trim(),
+      role: "Owner",
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) return null;
+  return mapWorkspaceRow(data);
+}
+
+export async function renameWorkspaceInSupabase(userId, workspaceId, name) {
+  const { data, error } = await supabase
+    .from("workspaces")
+    .update({ name: String(name).trim() })
+    .eq("id", workspaceId)
+    .eq("user_id", userId)
+    .select("*")
+    .single();
+
+  if (error || !data) return null;
+  return mapWorkspaceRow(data);
+}
+
+export async function savePersonaToSupabase(userId, workspaceId, personaPayload, existingId = null) {
+  const rowPayload = {
+    user_id: userId,
+    workspace_id: workspaceId,
+    name: personaPayload.name,
+    tagline: personaPayload.tagline || "",
+    description: personaPayload.description || "",
+    avatar_code: personaPayload.avatarCode || "CA",
+    segment: personaPayload.segment || "Custom Segment",
+    tags: personaPayload.tags || [],
+    characteristics: personaPayload.characteristics || [],
+    preferences: personaPayload.preferences || [],
+    motivations: personaPayload.motivations || [],
+    purchasing_behavior: personaPayload.purchasingBehavior || "",
+    decision_factors: personaPayload.decisionFactors || [],
+    concerns: personaPayload.concerns || [],
+    context: personaPayload.context || "",
+    price_sensitivity: personaPayload.priceSensitivity || "Moderate",
+    decision_speed: personaPayload.decisionSpeed || "Deliberate",
+    brand_loyalty: Number(personaPayload.brandLoyalty) || 0,
+    is_built_in: false,
+  };
+
+  if (existingId && !String(existingId).startsWith("persona-")) {
+    const { data, error } = await supabase
+      .from("personas")
+      .update(rowPayload)
+      .eq("id", existingId)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+    if (!error && data) return mapPersonaRow(data);
+  }
+
+  const { data, error } = await supabase
+    .from("personas")
+    .insert(rowPayload)
+    .select("*")
+    .single();
+
+  if (error || !data) return null;
+  return mapPersonaRow(data);
+}
+
+export async function deletePersonaInSupabase(userId, workspaceId, personaId) {
+  if (String(personaId).startsWith("persona-") && !String(personaId).startsWith("persona-custom-")) {
+    // Built-in persona: record in workspace deleted_builtin_persona_ids
+    const { data: ws } = await supabase
+      .from("workspaces")
+      .select("deleted_builtin_persona_ids")
+      .eq("id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (ws) {
+      const existing = Array.isArray(ws.deleted_builtin_persona_ids)
+        ? ws.deleted_builtin_persona_ids
+        : [];
+      if (!existing.includes(personaId)) {
+        await supabase
+          .from("workspaces")
+          .update({ deleted_builtin_persona_ids: [...existing, personaId] })
+          .eq("id", workspaceId)
+          .eq("user_id", userId);
+      }
+    }
+    return true;
+  }
+
+  const { error } = await supabase
+    .from("personas")
+    .delete()
+    .eq("id", personaId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+export async function saveSimulationToSupabase(userId, workspaceId, sim) {
+  const rowPayload = {
+    user_id: userId,
+    workspace_id: workspaceId,
+    name: sim.name,
+    type: sim.type,
+    description: sim.description || "",
+    hypothesis: sim.hypothesis || "",
+    research_context: sim.researchContext || "",
+    target_audience: sim.targetAudience || "",
+    research_objectives: sim.researchObjectives || "",
+    type_specific_data: sim.typeSpecificData || {},
+    materials: sim.materials || [],
+    questions: sim.questions || [],
+    selected_personas: sim.selectedPersonas || [],
+    status: sim.status || "Active",
+    stage: sim.stage || "Queued",
+    progress: typeof sim.progress === "number" ? sim.progress : 0,
+    started_at: sim.startedAt || new Date().toISOString(),
+    completed_at: sim.completedAt || null,
+    estimated_seconds_remaining: sim.estimatedSecondsRemaining ?? null,
+    is_sample: Boolean(sim.isSample),
+    results: sim.results || null,
+  };
+
+  const isUuid =
+    sim.id &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sim.id);
+
+  if (isUuid) {
+    const { data, error } = await supabase
+      .from("simulations")
+      .upsert({ id: sim.id, ...rowPayload })
+      .select("*")
+      .single();
+    if (!error && data) return mapSimulationRow(data);
+  } else {
+    const { data, error } = await supabase
+      .from("simulations")
+      .insert(rowPayload)
+      .select("*")
+      .single();
+    if (!error && data) return mapSimulationRow(data);
+  }
+  return null;
+}
+
+export async function deleteSimulationInSupabase(userId, simulationId) {
+  const { error } = await supabase
+    .from("simulations")
+    .delete()
+    .eq("id", simulationId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+export async function saveReportToSupabase(userId, workspaceId, report) {
+  const { data, error } = await supabase
+    .from("reports")
+    .insert({
+      user_id: userId,
+      workspace_id: workspaceId,
+      simulation_id: report.simulationId,
+      simulation_name: report.simulationName,
+      title: report.title,
+      format: report.format || "PDF",
+      size_label: report.sizeLabel || "32 KB",
+      summary_snippet: report.summarySnippet || "",
+    })
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  return mapReportRow(data);
+}
+
+export async function deleteReportInSupabase(userId, reportId) {
+  const { error } = await supabase
+    .from("reports")
+    .delete()
+    .eq("id", reportId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+export async function logRecentSearchToSupabase(userId, workspaceId, item) {
+  const { data, error } = await supabase
+    .from("recent_searches")
+    .insert({
+      user_id: userId,
+      workspace_id: workspaceId,
+      query: item.query,
+      category: item.category || "Simulation",
+      target_id: item.targetId || null,
+      timestamp: new Date().toISOString(),
+    })
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  return mapRecentSearchRow(data);
+}
+
+export async function deleteRecentSearchInSupabase(userId, searchId) {
+  const { error } = await supabase
+    .from("recent_searches")
+    .delete()
+    .eq("id", searchId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+export async function clearRecentSearchesInSupabase(userId, workspaceId) {
+  const { error } = await supabase
+    .from("recent_searches")
+    .delete()
+    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId);
+  return !error;
+}
+
+export async function updateProfileInSupabase(userId, { name, email, plan }) {
+  const updates = {};
+  if (name) updates.name = String(name).trim();
+  if (email) updates.email = String(email).trim();
+  if (plan) updates.plan = plan;
+
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .update(updates)
+    .eq("user_id", userId)
+    .select("*")
+    .single();
+
+  if (error || !data) return null;
+  return data;
+}

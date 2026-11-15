@@ -328,28 +328,34 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <input
-                type="text"
-                required
-                value={newAudienceName}
-                onChange={(e) => setNewAudienceName(e.target.value)}
-                placeholder="Audience Name (e.g., Retail Buyers)"
-                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
-              />
-              <input
-                type="text"
-                value={newAudienceSegment}
-                onChange={(e) => setNewAudienceSegment(e.target.value)}
-                placeholder="Segment / Industry"
-                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
-              />
-              <input
-                type="text"
-                value={newAudienceDescription}
-                onChange={(e) => setNewAudienceDescription(e.target.value)}
-                placeholder="Goals, mindset, or objections..."
-                className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
-              />
+              <div>
+                <label className="block text-[10px] font-semibold text-[#111827] mb-0.5">Audience Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newAudienceName}
+                  onChange={(e) => setNewAudienceName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#111827] mb-0.5">Segment / Industry</label>
+                <input
+                  type="text"
+                  value={newAudienceSegment}
+                  onChange={(e) => setNewAudienceSegment(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#111827] mb-0.5">Description</label>
+                <input
+                  type="text"
+                  value={newAudienceDescription}
+                  onChange={(e) => setNewAudienceDescription(e.target.value)}
+                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
+                />
+              </div>
               <button
                 type="submit"
                 className="w-full py-1.5 bg-[#000000] text-white font-semibold rounded text-xs cursor-pointer"
@@ -368,7 +374,6 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
               type="text"
               value={customAudienceContextNote}
               onChange={(e) => setCustomAudienceContextNote(e.target.value)}
-              placeholder="e.g., Focus on European enterprise buyers..."
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md text-[#111827] focus:outline-none focus:border-[#000000]"
             />
           </div>
@@ -539,11 +544,6 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={
-                  activePersona
-                    ? `Ask ${activePersona.name} a question...`
-                    : 'Ask about simulation findings, audience objections, pricing, or market trends...'
-                }
                 className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
               />
               <button

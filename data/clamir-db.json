@@ -1,0 +1,1301 @@
+{
+  "users": [
+    {
+      "id": "user-owner-1",
+      "name": "Varuna",
+      "email": "thexplorervaruns@gmail.com",
+      "plan": "Explorer",
+      "isOwner": true,
+      "createdAt": "2026-11-10T09:00:00Z",
+      "passwordHash": "04a5591b245b45e82200f5a4b9a9cd6c755a1071796817633a0c98f4e7504ef5995f0b03cb6c6e7876b56267dfe38aac061e9230e745f7389dcb44938bcfbfe5",
+      "passwordSalt": "86ae44a36e430c07771ca795f01531e4"
+    },
+    {
+      "id": "user-1794743591865",
+      "name": "Varun S",
+      "email": "mailattvaruns@gmail.com",
+      "plan": "Explorer",
+      "isOwner": false,
+      "createdAt": "2026-11-15T11:53:11.865Z",
+      "passwordHash": "d4db8c2ce033657962c750628eae6bbd1d1ce1450623a59dfcef53629b8cc3cbdb5b38f61ad76e7ec69aabda00cd50798e05cc41232ca8404f850031c51550bb",
+      "passwordSalt": "7ac91a47d5754c975b45a0688143ce98"
+    }
+  ],
+  "sessions": [
+    {
+      "token": "1cb4b4d9532777256957b41500b0d584d317fd01a9acc979",
+      "userId": "user-1794743591865",
+      "createdAt": "2026-11-15T11:53:11.866Z"
+    },
+    {
+      "token": "dc4f3cf951bd1d01f9034d56863da9c8debfb45c653935ff",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-15T12:28:36.665Z"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "ws-default",
+      "name": "Clamir Workspace",
+      "ownerId": "user-owner-1",
+      "createdAt": "2026-11-10T09:00:00Z",
+      "role": "Owner"
+    },
+    {
+      "id": "ws-growth-experiments",
+      "name": "Q4 Growth & Pricing Experiments",
+      "ownerId": "user-owner-1",
+      "createdAt": "2026-11-11T12:00:00Z",
+      "role": "Owner"
+    },
+    {
+      "id": "ws-1794743591865",
+      "name": "Clamir Workspace",
+      "ownerId": "user-1794743591865",
+      "createdAt": "2026-11-15T11:53:11.865Z",
+      "role": "Owner"
+    }
+  ],
+  "customPersonas": [],
+  "favoritePersonaIdsByWorkspace": {
+    "ws-default": [
+      "persona-experience-seekers",
+      "persona-value-optimizers",
+      "persona-quality-seekers"
+    ]
+  },
+  "simulations": [
+    {
+      "id": "sim-sample-pricing-01",
+      "workspaceId": "ws-default",
+      "name": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "type": "pricing_analysis",
+      "description": "Evaluating customer response to a three-tier SaaS pricing model ($0 Starter, $149 Growth flat-rate, Custom Enterprise) versus per-seat billing for a B2B product analytics workflow.",
+      "hypothesis": "Value Optimizers and Convenience Seekers will strongly prefer predictable flat-rate workspace pricing ($149/mo) over per-seat charges that penalize team collaboration.",
+      "researchContext": "Pre-launch pricing calibration for Q4 product release targeting startup founders, product managers, and UX researchers.",
+      "targetAudience": "B2B SaaS Founders, Product Managers, and Consumer Insights Teams",
+      "researchObjectives": "Identify optimal price anchor for Growth tier, test resistance to $149/mo price point, and uncover must-have features in the Free Explorer tier.",
+      "typeSpecificData": {
+        "currency": "USD ($)",
+        "pricingTiers": [
+          {
+            "id": "t1",
+            "name": "Explorer",
+            "price": "$0",
+            "billingCycle": "monthly",
+            "features": "5 simulations/mo, 7 built-in personas, standard summary view"
+          },
+          {
+            "id": "t2",
+            "name": "Growth",
+            "price": "$149",
+            "billingCycle": "monthly",
+            "features": "Unlimited simulations, custom personas, AI Agent + Web Search, PDF/CSV/JSON exports"
+          },
+          {
+            "id": "t3",
+            "name": "Enterprise",
+            "price": "Custom",
+            "billingCycle": "annual",
+            "features": "Unlimited workspaces, SSO, custom calibration, API access"
+          }
+        ]
+      },
+      "materials": [
+        {
+          "id": "mat-1",
+          "kind": "file",
+          "name": "Q4_Pricing_Deck_Summary.md",
+          "fileType": "MD",
+          "sizeBytes": 4280,
+          "extractedContent": "Competitor benchmark shows legacy research panels charge $2,500+ per study with 2-week turnaround. Flat-rate $149/mo unlimited simulation model positions Clamir as an everyday decision tool.",
+          "addedAt": "2026-11-12T10:15:00Z"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q-1",
+          "text": "Which pricing tier best matches your workflow and budget expectations?",
+          "type": "single_choice",
+          "required": true,
+          "options": [
+            "Explorer ($0)",
+            "Growth ($149/mo)",
+            "Enterprise (Custom)",
+            "None — price is too high"
+          ]
+        },
+        {
+          "id": "q-2",
+          "text": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+          "type": "free_response",
+          "required": true,
+          "options": []
+        },
+        {
+          "id": "q-3",
+          "text": "Rate the perceived value of the Growth tier at $149/month.",
+          "type": "rating_scale",
+          "required": true,
+          "options": [
+            "1 - Poor Value",
+            "2",
+            "3",
+            "4",
+            "5 - Exceptional Value"
+          ]
+        }
+      ],
+      "selectedPersonas": [
+        {
+          "personaId": "persona-value-optimizers",
+          "personaName": "Value Optimizers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-quality-seekers",
+          "personaName": "Quality Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-convenience-seekers",
+          "personaName": "Convenience Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-experience-seekers",
+          "personaName": "Experience Seekers",
+          "agentCount": 5
+        }
+      ],
+      "status": "Completed",
+      "stage": "Completed",
+      "progress": 100,
+      "startedAt": "2026-11-12T10:20:00Z",
+      "completedAt": "2026-11-12T10:21:15Z",
+      "estimatedSecondsRemaining": 0,
+      "isSample": true,
+      "results": {
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "aiEngineMode": "simulated-engine",
+        "generatedAt": "2026-11-12T10:21:15Z",
+        "executiveSummary": {
+          "mainFinding": "78% of simulated personas favored the flat-rate workspace model over per-seat pricing, with strong conversion intent on the $149/mo Growth tier when positioned against traditional $2,500+ research panels.",
+          "overallReaction": "Broadly positive reception across Quality Seekers (88/100 acceptance) and Convenience Seekers (82/100), while Value Optimizers requested a mid-tier bridge or annual discount option before committing to $149/mo.",
+          "importantOpportunities": [
+            "Highlight cost comparison against traditional consumer research panels directly on the pricing card",
+            "Include 1 sample PDF export in the Free Explorer tier so Value Optimizers can verify deliverable quality before upgrading",
+            "Offer a 20% annual billing discount ($119/mo equivalent) to accelerate budget approval"
+          ],
+          "mainConcerns": [
+            "Jump from $0 Explorer to $149/mo Growth feels steep for solo founders running only 6–8 simulations per month",
+            "Quality Seekers want explicit clarity on how custom persona calibration differs between Growth and Enterprise"
+          ]
+        },
+        "sentimentOverview": {
+          "positive": 72,
+          "neutral": 19,
+          "negative": 9
+        },
+        "audiencePreferences": [
+          {
+            "label": "Flat-rate workspace billing (no per-seat penalty)",
+            "score": 89,
+            "detail": "Strong preference across all four personas to invite team viewers without incremental seat charges."
+          },
+          {
+            "label": "Instant PDF & CSV research deliverable exports",
+            "score": 84,
+            "detail": "Rated as the #1 trigger for upgrading from Explorer to Growth."
+          },
+          {
+            "label": "Custom Persona Builder inclusion in Growth tier",
+            "score": 79,
+            "detail": "Quality Seekers view custom persona creation as essential for domain-specific accuracy."
+          }
+        ],
+        "objectionsAndConcerns": [
+          {
+            "objection": "Gap between $0 Free tier and $149/mo Growth tier for occasional solo users",
+            "severity": "High",
+            "frequencyPct": 38,
+            "mitigation": "Allow Explorer users to purchase single on-demand simulation packs or unlock 1 full PDF report trial."
+          },
+          {
+            "objection": "Ambiguity around AI agent usage limits on the Free Explorer plan",
+            "severity": "Medium",
+            "frequencyPct": 24,
+            "mitigation": "State exact monthly message count (e.g., 25 AI Agent queries/month) instead of \"Limited usage\"."
+          }
+        ],
+        "opportunities": [
+          {
+            "title": "ROI Anchor Comparison Block",
+            "impact": "High",
+            "description": "Framing $149/mo against a single $2,500 agency focus group increases simulated Value Optimizer acceptance by +22 points."
+          },
+          {
+            "title": "Sample Export Preview in Free Tier",
+            "impact": "High",
+            "description": "Allowing free users to preview a watermarked PDF brief removes uncertainty about deliverable depth."
+          }
+        ],
+        "personaBreakdown": [
+          {
+            "personaId": "persona-value-optimizers",
+            "personaName": "Value Optimizers",
+            "segment": "ROI & Cost-Efficiency Evaluators",
+            "agentCount": 10,
+            "overallReaction": "Mixed",
+            "acceptanceScore": 69,
+            "mainTakeaway": "Appreciates unlimited simulations and zero per-seat fees, but scrutinizes the $0 to $149 step-up unless anchored against agency research costs.",
+            "simulatedStatement": "[Simulated Persona Statement] \"If this replaces even one external survey panel a quarter, $149/month pays for itself ten times over—but I need to see one full export on the free plan before I put down a corporate card.\"",
+            "answers": [
+              {
+                "questionId": "q-1",
+                "questionText": "Which pricing tier best matches your workflow and budget expectations?",
+                "answer": "Explorer ($0) initially, converting to Growth ($149/mo) after validating export quality."
+              },
+              {
+                "questionId": "q-2",
+                "questionText": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+                "answer": "Strongly prefer flat-rate workspace billing; per-seat pricing discourages sharing findings with engineering and marketing leads."
+              },
+              {
+                "questionId": "q-3",
+                "questionText": "Rate the perceived value of the Growth tier at $149/month.",
+                "answer": "4 / 5 — Strong value once unlimited runs and custom personas are factored in."
+              }
+            ],
+            "reasoning": "Evaluates unit cost per simulation run. At 15 simulations/month, $9.93 per study is highly competitive, provided there are no hidden export paywalls.",
+            "motivations": [
+              "Predictable monthly software spend",
+              "Sharing reports across team without seat tax"
+            ],
+            "objections": [
+              "Wants exact numeric caps stated on Explorer tier",
+              "Prefers an annual discount option"
+            ],
+            "confidenceScore": 87,
+            "uncertaintyNote": "Simulated conversion depends on whether user runs more than 4 studies per month."
+          },
+          {
+            "personaId": "persona-quality-seekers",
+            "personaName": "Quality Seekers",
+            "segment": "High-Precision & Craftsmanship Buyers",
+            "agentCount": 10,
+            "overallReaction": "Positive",
+            "acceptanceScore": 88,
+            "mainTakeaway": "Views $149/mo as well-justified because it unlocks the Custom Persona library, Web Search grounding, and structured JSON/CSV exports.",
+            "simulatedStatement": "[Simulated Persona Statement] \"The price is secondary to methodological rigor. Having full access to custom persona attributes and raw JSON/CSV data in the Growth tier makes $149 an easy decision.\"",
+            "answers": [
+              {
+                "questionId": "q-1",
+                "questionText": "Which pricing tier best matches your workflow and budget expectations?",
+                "answer": "Growth ($149/mo)"
+              },
+              {
+                "questionId": "q-2",
+                "questionText": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+                "answer": "Flat-rate is cleaner and allows cross-functional peer review of simulation hypotheses."
+              },
+              {
+                "questionId": "q-3",
+                "questionText": "Rate the perceived value of the Growth tier at $149/month.",
+                "answer": "5 / 5 — High value for research teams."
+              }
+            ],
+            "reasoning": "Prioritizes custom persona granularity and raw data export formats over entry-level price discounts.",
+            "motivations": [
+              "Granular control over persona attributes",
+              "Verifiable citations in AI Agent Web Search"
+            ],
+            "objections": [
+              "Wants documentation on confidence scoring methodology"
+            ],
+            "confidenceScore": 91,
+            "uncertaintyNote": "High alignment with product capabilities."
+          },
+          {
+            "personaId": "persona-convenience-seekers",
+            "personaName": "Convenience Seekers",
+            "segment": "Time-Constrained & Speed-First Users",
+            "agentCount": 10,
+            "overallReaction": "Positive",
+            "acceptanceScore": 82,
+            "mainTakeaway": "Converts quickly for one-click PDF executive briefs and ready-to-use persona presets that save hours of manual research prep.",
+            "simulatedStatement": "[Simulated Persona Statement] \"If I can walk into a Monday product review with a downloadable PDF brief in five minutes, $149/month is a no-brainer.\"",
+            "answers": [
+              {
+                "questionId": "q-1",
+                "questionText": "Which pricing tier best matches your workflow and budget expectations?",
+                "answer": "Growth ($149/mo)"
+              },
+              {
+                "questionId": "q-2",
+                "questionText": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+                "answer": "Much simpler—no need to calculate seats or manage licenses."
+              },
+              {
+                "questionId": "q-3",
+                "questionText": "Rate the perceived value of the Growth tier at $149/month.",
+                "answer": "4 / 5 — Great time-saver."
+              }
+            ],
+            "reasoning": "Driven by speed-to-deliverable and zero procurement friction.",
+            "motivations": [
+              "Instant executive-ready PDF reports",
+              "Pre-built simulation templates"
+            ],
+            "objections": [
+              "Does not want complex setup steps before running first test"
+            ],
+            "confidenceScore": 85,
+            "uncertaintyNote": "Low variance across simulated agents."
+          }
+        ],
+        "recommendations": [
+          {
+            "id": "rec-1",
+            "priority": "High",
+            "title": "State explicit numerical quotas on the Explorer Free card",
+            "explanation": "Replace vague \"Limited AI agent usage\" copy with a concrete allowance (e.g., \"5 simulations & 25 AI Agent queries/mo\") to build immediate trust with Value Optimizers.",
+            "expectedImpact": "+18% simulated free-to-paid evaluation trust"
+          },
+          {
+            "id": "rec-2",
+            "priority": "High",
+            "title": "Include 1 sample full-fidelity PDF report download on Explorer",
+            "explanation": "Letting prospective buyers inspect a real exported brief eliminates deliverable uncertainty prior to the $149/mo upgrade.",
+            "expectedImpact": "+24% simulated Growth tier conversion rate"
+          },
+          {
+            "id": "rec-3",
+            "priority": "Medium",
+            "title": "Add an Annual Billing toggle with a 15–20% savings incentive",
+            "explanation": "Finance-conscious teams and Brand Loyalists prefer annual predictability when onboarding a core research platform.",
+            "expectedImpact": "Higher simulated LTV and lower quarterly churn"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sim-sample-ab-02",
+      "workspaceId": "ws-default",
+      "name": "Landing Hero Messaging A/B Test: Speed vs. Risk Reduction",
+      "type": "ab_testing",
+      "description": "Comparing two hero value propositions for an AI consumer intelligence launch: Option A focuses on \"10x Faster Audience Research in Minutes\" while Option B focuses on \"Understand Your Audience Before Making Your Move.\"",
+      "hypothesis": "Option B (\"Understand Your Audience Before Making Your Move\") will outperform Option A across Quality Seekers and Brand Loyalists by emphasizing decision confidence rather than raw speed hype.",
+      "researchContext": "Website homepage hero copy optimization for B2B founders and product leaders.",
+      "targetAudience": "Founders, Product Managers, Growth Marketers, and UX Researchers",
+      "researchObjectives": "Determine winning headline direction, evaluate credibility perception, and measure segment-by-segment preference.",
+      "typeSpecificData": {
+        "optionADescription": "Option A (Speed Angle): \"Run 10x Faster Customer Research in 60 Seconds. Replace slow surveys with instant AI answers.\"",
+        "optionBDescription": "Option B (Decision Clarity Angle): \"Understand Your Audience Before Making Your Move. Simulate customer reactions, test ideas, explore pricing, and discover opportunities with AI-powered audience intelligence.\"",
+        "comparisonCriteria": "Credibility, clarity of value proposition, emotional resonance, and click-through intent."
+      },
+      "materials": [],
+      "questions": [
+        {
+          "id": "q-ab-1",
+          "text": "Which headline and description makes you trust the platform more?",
+          "type": "single_choice",
+          "required": true,
+          "options": [
+            "Option A (Speed Angle)",
+            "Option B (Decision Clarity Angle)"
+          ]
+        },
+        {
+          "id": "q-ab-2",
+          "text": "Explain why you chose your preferred option and what impression the other option gave you.",
+          "type": "free_response",
+          "required": true,
+          "options": []
+        }
+      ],
+      "selectedPersonas": [
+        {
+          "personaId": "persona-quality-seekers",
+          "personaName": "Quality Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-brand-loyalists",
+          "personaName": "Brand Loyalists",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-experience-seekers",
+          "personaName": "Experience Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-convenience-seekers",
+          "personaName": "Convenience Seekers",
+          "agentCount": 10
+        }
+      ],
+      "status": "Completed",
+      "stage": "Completed",
+      "progress": 100,
+      "startedAt": "2026-11-13T14:00:00Z",
+      "completedAt": "2026-11-13T14:01:10Z",
+      "estimatedSecondsRemaining": 0,
+      "isSample": true,
+      "results": {
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "aiEngineMode": "simulated-engine",
+        "generatedAt": "2026-11-13T14:01:10Z",
+        "executiveSummary": {
+          "mainFinding": "Option B (\"Understand Your Audience Before Making Your Move\") won decisively with a 76% simulated preference score vs. 24% for Option A.",
+          "overallReaction": "Simulated personas perceived Option B as strategic, trustworthy, and transparent, whereas Option A triggered skepticism about superficial \"60-second AI hype\" among Quality Seekers and Brand Loyalists.",
+          "importantOpportunities": [
+            "Lead with Option B as the primary hero headline while weaving speed-to-insight into the secondary How It Works steps",
+            "Explicitly label outputs as simulated audience intelligence to reinforce methodological honesty"
+          ],
+          "mainConcerns": [
+            "Option A alienated researchers who felt \"Replace surveys in 60 seconds\" sounded like generic AI exaggeration"
+          ]
+        },
+        "sentimentOverview": {
+          "positive": 79,
+          "neutral": 14,
+          "negative": 7
+        },
+        "audiencePreferences": [
+          {
+            "label": "Strategic decision-making framing (Option B)",
+            "score": 86,
+            "detail": "Resonates with high-stakes business decisions like pricing, positioning, and product launches."
+          },
+          {
+            "label": "Concrete capability list (ideas, pricing, opportunities)",
+            "score": 81,
+            "detail": "Helps visitors immediately picture what they can simulate on day one."
+          }
+        ],
+        "objectionsAndConcerns": [
+          {
+            "objection": "Skepticism toward \"10x faster in 60 seconds\" hype claims in Option A",
+            "severity": "High",
+            "frequencyPct": 68,
+            "mitigation": "Avoid hyperbolic multipliers in top-level headlines; demonstrate speed through an interactive live demo instead."
+          }
+        ],
+        "opportunities": [
+          {
+            "title": "Pair Option B Headline with Interactive Live Demo",
+            "impact": "High",
+            "description": "Satisfies both Quality Seekers (who want depth) and Convenience Seekers (who experience the speed firsthand)."
+          }
+        ],
+        "abComparison": {
+          "optionALabel": "Option A: 10x Faster Research in 60s",
+          "optionBLabel": "Option B: Understand Your Audience Before Making Your Move",
+          "optionAScore": 58,
+          "optionBScore": 87,
+          "optionAStrengths": [
+            "Immediately communicates speed and low time commitment",
+            "Appeals to time-strapped Convenience Seekers scanning quickly"
+          ],
+          "optionAWeaknesses": [
+            "Sounds like generic AI marketing hyperbole (\"10x in 60 seconds\")",
+            "Triggers distrust among researchers and executives who care about rigor"
+          ],
+          "optionBStrengths": [
+            "Frames the product around high-value strategic outcomes and risk reduction",
+            "Clearly enumerates concrete use cases (ideas, pricing, opportunities)",
+            "Builds institutional trust and authority"
+          ],
+          "optionBWeaknesses": [
+            "Slightly longer description requires clean typographic hierarchy"
+          ],
+          "personaPreferences": [
+            {
+              "personaName": "Quality Seekers",
+              "preferredOption": "Option B",
+              "rationale": "Option B respects the complexity of audience intelligence and avoids exaggerated speed claims."
+            },
+            {
+              "personaName": "Brand Loyalists",
+              "preferredOption": "Option B",
+              "rationale": "Sounds like an authoritative, dependable enterprise software partner."
+            },
+            {
+              "personaName": "Experience Seekers",
+              "preferredOption": "Option B",
+              "rationale": "More inspiring and human-centric framing."
+            },
+            {
+              "personaName": "Convenience Seekers",
+              "preferredOption": "Option A",
+              "rationale": "Liked the explicit 60-second promise, though still rated Option B highly for clarity."
+            }
+          ],
+          "overallVerdict": "Deploy Option B (\"Understand Your Audience Before Making Your Move\") as the flagship hero lockup. Capture Option A’s speed advantage implicitly via the interactive demo."
+        },
+        "personaBreakdown": [
+          {
+            "personaId": "persona-quality-seekers",
+            "personaName": "Quality Seekers",
+            "segment": "High-Precision & Craftsmanship Buyers",
+            "agentCount": 10,
+            "overallReaction": "Positive",
+            "acceptanceScore": 91,
+            "mainTakeaway": "Strongly endorses Option B for its grounded, strategic tone.",
+            "simulatedStatement": "[Simulated Persona Statement] \"Option B speaks to actual product strategy—testing pricing and reactions before committing capital. Option A sounds like another disposable wrapper.\"",
+            "answers": [
+              {
+                "questionId": "q-ab-1",
+                "questionText": "Which headline and description makes you trust the platform more?",
+                "answer": "Option B (Decision Clarity Angle)"
+              },
+              {
+                "questionId": "q-ab-2",
+                "questionText": "Explain why you chose your preferred option and what impression the other option gave you.",
+                "answer": "Option B specifies concrete research domains (ideas, pricing, opportunities) without over-promising."
+              }
+            ],
+            "reasoning": "Associates restrained, specific language with higher underlying model quality.",
+            "motivations": [
+              "Decision accuracy",
+              "Methodological transparency"
+            ],
+            "objections": [
+              "Dislikes \"10x\" marketing clichés"
+            ],
+            "confidenceScore": 93,
+            "uncertaintyNote": "Very high consensus across simulated agents."
+          },
+          {
+            "personaId": "persona-convenience-seekers",
+            "personaName": "Convenience Seekers",
+            "agentCount": 10,
+            "segment": "Time-Constrained & Speed-First Users",
+            "overallReaction": "Positive",
+            "acceptanceScore": 81,
+            "mainTakeaway": "Split between Option A’s speed promise and Option B’s clear use-case list.",
+            "simulatedStatement": "[Simulated Persona Statement] \"I like knowing it only takes a minute from Option A, but Option B tells me right away that I can test my pricing tiers today.\"",
+            "answers": [
+              {
+                "questionId": "q-ab-1",
+                "questionText": "Which headline and description makes you trust the platform more?",
+                "answer": "Option B (with 60% preference, 40% Option A)"
+              },
+              {
+                "questionId": "q-ab-2",
+                "questionText": "Explain why you chose your preferred option and what impression the other option gave you.",
+                "answer": "Knowing the exact use cases saves me from having to guess what the tool actually tests."
+              }
+            ],
+            "reasoning": "Values immediate clarity on what tasks the software handles.",
+            "motivations": [
+              "Fast setup",
+              "Actionable pricing and idea feedback"
+            ],
+            "objections": [
+              "Wants to try the interactive agent right from the hero"
+            ],
+            "confidenceScore": 84,
+            "uncertaintyNote": "Moderate preference split between speed and clarity."
+          }
+        ],
+        "recommendations": [
+          {
+            "id": "rec-ab-1",
+            "priority": "High",
+            "title": "Adopt Option B for the public landing page Hero",
+            "explanation": "Option B maximizes trust across skeptical researchers and founders while clearly stating the platform’s core jobs-to-be-done.",
+            "expectedImpact": "+31% simulated engagement with primary CTA"
+          },
+          {
+            "id": "rec-ab-2",
+            "priority": "Medium",
+            "title": "Pair primary CTA with a direct \"Try Interactive Agent\" secondary button",
+            "explanation": "Gives Convenience Seekers immediate proof of speed without needing hyperbolic headline claims.",
+            "expectedImpact": "Higher interactive demo completion rate"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sim-sample-pricing-01-ws-1794743591865",
+      "workspaceId": "ws-1794743591865",
+      "name": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "type": "pricing_analysis",
+      "description": "Evaluating customer response to a three-tier SaaS pricing model ($0 Starter, $149 Growth flat-rate, Custom Enterprise) versus per-seat billing for a B2B product analytics workflow.",
+      "hypothesis": "Value Optimizers and Convenience Seekers will strongly prefer predictable flat-rate workspace pricing ($149/mo) over per-seat charges that penalize team collaboration.",
+      "researchContext": "Pre-launch pricing calibration for Q4 product release targeting startup founders, product managers, and UX researchers.",
+      "targetAudience": "B2B SaaS Founders, Product Managers, and Consumer Insights Teams",
+      "researchObjectives": "Identify optimal price anchor for Growth tier, test resistance to $149/mo price point, and uncover must-have features in the Free Explorer tier.",
+      "typeSpecificData": {
+        "currency": "USD ($)",
+        "pricingTiers": [
+          {
+            "id": "t1",
+            "name": "Explorer",
+            "price": "$0",
+            "billingCycle": "monthly",
+            "features": "5 simulations/mo, 7 built-in personas, standard summary view"
+          },
+          {
+            "id": "t2",
+            "name": "Growth",
+            "price": "$149",
+            "billingCycle": "monthly",
+            "features": "Unlimited simulations, custom personas, AI Agent + Web Search, PDF/CSV/JSON exports"
+          },
+          {
+            "id": "t3",
+            "name": "Enterprise",
+            "price": "Custom",
+            "billingCycle": "annual",
+            "features": "Unlimited workspaces, SSO, custom calibration, API access"
+          }
+        ]
+      },
+      "materials": [
+        {
+          "id": "mat-1",
+          "kind": "file",
+          "name": "Q4_Pricing_Deck_Summary.md",
+          "fileType": "MD",
+          "sizeBytes": 4280,
+          "extractedContent": "Competitor benchmark shows legacy research panels charge $2,500+ per study with 2-week turnaround. Flat-rate $149/mo unlimited simulation model positions Clamir as an everyday decision tool.",
+          "addedAt": "2026-11-12T10:15:00Z"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q-1",
+          "text": "Which pricing tier best matches your workflow and budget expectations?",
+          "type": "single_choice",
+          "required": true,
+          "options": [
+            "Explorer ($0)",
+            "Growth ($149/mo)",
+            "Enterprise (Custom)",
+            "None — price is too high"
+          ]
+        },
+        {
+          "id": "q-2",
+          "text": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+          "type": "free_response",
+          "required": true,
+          "options": []
+        },
+        {
+          "id": "q-3",
+          "text": "Rate the perceived value of the Growth tier at $149/month.",
+          "type": "rating_scale",
+          "required": true,
+          "options": [
+            "1 - Poor Value",
+            "2",
+            "3",
+            "4",
+            "5 - Exceptional Value"
+          ]
+        }
+      ],
+      "selectedPersonas": [
+        {
+          "personaId": "persona-value-optimizers",
+          "personaName": "Value Optimizers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-quality-seekers",
+          "personaName": "Quality Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-convenience-seekers",
+          "personaName": "Convenience Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-experience-seekers",
+          "personaName": "Experience Seekers",
+          "agentCount": 5
+        }
+      ],
+      "status": "Completed",
+      "stage": "Completed",
+      "progress": 100,
+      "startedAt": "2026-11-12T10:20:00Z",
+      "completedAt": "2026-11-12T10:21:15Z",
+      "estimatedSecondsRemaining": 0,
+      "isSample": true,
+      "results": {
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "aiEngineMode": "simulated-engine",
+        "generatedAt": "2026-11-12T10:21:15Z",
+        "executiveSummary": {
+          "mainFinding": "78% of simulated personas favored the flat-rate workspace model over per-seat pricing, with strong conversion intent on the $149/mo Growth tier when positioned against traditional $2,500+ research panels.",
+          "overallReaction": "Broadly positive reception across Quality Seekers (88/100 acceptance) and Convenience Seekers (82/100), while Value Optimizers requested a mid-tier bridge or annual discount option before committing to $149/mo.",
+          "importantOpportunities": [
+            "Highlight cost comparison against traditional consumer research panels directly on the pricing card",
+            "Include 1 sample PDF export in the Free Explorer tier so Value Optimizers can verify deliverable quality before upgrading",
+            "Offer a 20% annual billing discount ($119/mo equivalent) to accelerate budget approval"
+          ],
+          "mainConcerns": [
+            "Jump from $0 Explorer to $149/mo Growth feels steep for solo founders running only 6–8 simulations per month",
+            "Quality Seekers want explicit clarity on how custom persona calibration differs between Growth and Enterprise"
+          ]
+        },
+        "sentimentOverview": {
+          "positive": 72,
+          "neutral": 19,
+          "negative": 9
+        },
+        "audiencePreferences": [
+          {
+            "label": "Flat-rate workspace billing (no per-seat penalty)",
+            "score": 89,
+            "detail": "Strong preference across all four personas to invite team viewers without incremental seat charges."
+          },
+          {
+            "label": "Instant PDF & CSV research deliverable exports",
+            "score": 84,
+            "detail": "Rated as the #1 trigger for upgrading from Explorer to Growth."
+          },
+          {
+            "label": "Custom Persona Builder inclusion in Growth tier",
+            "score": 79,
+            "detail": "Quality Seekers view custom persona creation as essential for domain-specific accuracy."
+          }
+        ],
+        "objectionsAndConcerns": [
+          {
+            "objection": "Gap between $0 Free tier and $149/mo Growth tier for occasional solo users",
+            "severity": "High",
+            "frequencyPct": 38,
+            "mitigation": "Allow Explorer users to purchase single on-demand simulation packs or unlock 1 full PDF report trial."
+          },
+          {
+            "objection": "Ambiguity around AI agent usage limits on the Free Explorer plan",
+            "severity": "Medium",
+            "frequencyPct": 24,
+            "mitigation": "State exact monthly message count (e.g., 25 AI Agent queries/month) instead of \"Limited usage\"."
+          }
+        ],
+        "opportunities": [
+          {
+            "title": "ROI Anchor Comparison Block",
+            "impact": "High",
+            "description": "Framing $149/mo against a single $2,500 agency focus group increases simulated Value Optimizer acceptance by +22 points."
+          },
+          {
+            "title": "Sample Export Preview in Free Tier",
+            "impact": "High",
+            "description": "Allowing free users to preview a watermarked PDF brief removes uncertainty about deliverable depth."
+          }
+        ],
+        "personaBreakdown": [
+          {
+            "personaId": "persona-value-optimizers",
+            "personaName": "Value Optimizers",
+            "segment": "ROI & Cost-Efficiency Evaluators",
+            "agentCount": 10,
+            "overallReaction": "Mixed",
+            "acceptanceScore": 69,
+            "mainTakeaway": "Appreciates unlimited simulations and zero per-seat fees, but scrutinizes the $0 to $149 step-up unless anchored against agency research costs.",
+            "simulatedStatement": "[Simulated Persona Statement] \"If this replaces even one external survey panel a quarter, $149/month pays for itself ten times over—but I need to see one full export on the free plan before I put down a corporate card.\"",
+            "answers": [
+              {
+                "questionId": "q-1",
+                "questionText": "Which pricing tier best matches your workflow and budget expectations?",
+                "answer": "Explorer ($0) initially, converting to Growth ($149/mo) after validating export quality."
+              },
+              {
+                "questionId": "q-2",
+                "questionText": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+                "answer": "Strongly prefer flat-rate workspace billing; per-seat pricing discourages sharing findings with engineering and marketing leads."
+              },
+              {
+                "questionId": "q-3",
+                "questionText": "Rate the perceived value of the Growth tier at $149/month.",
+                "answer": "4 / 5 — Strong value once unlimited runs and custom personas are factored in."
+              }
+            ],
+            "reasoning": "Evaluates unit cost per simulation run. At 15 simulations/month, $9.93 per study is highly competitive, provided there are no hidden export paywalls.",
+            "motivations": [
+              "Predictable monthly software spend",
+              "Sharing reports across team without seat tax"
+            ],
+            "objections": [
+              "Wants exact numeric caps stated on Explorer tier",
+              "Prefers an annual discount option"
+            ],
+            "confidenceScore": 87,
+            "uncertaintyNote": "Simulated conversion depends on whether user runs more than 4 studies per month."
+          },
+          {
+            "personaId": "persona-quality-seekers",
+            "personaName": "Quality Seekers",
+            "segment": "High-Precision & Craftsmanship Buyers",
+            "agentCount": 10,
+            "overallReaction": "Positive",
+            "acceptanceScore": 88,
+            "mainTakeaway": "Views $149/mo as well-justified because it unlocks the Custom Persona library, Web Search grounding, and structured JSON/CSV exports.",
+            "simulatedStatement": "[Simulated Persona Statement] \"The price is secondary to methodological rigor. Having full access to custom persona attributes and raw JSON/CSV data in the Growth tier makes $149 an easy decision.\"",
+            "answers": [
+              {
+                "questionId": "q-1",
+                "questionText": "Which pricing tier best matches your workflow and budget expectations?",
+                "answer": "Growth ($149/mo)"
+              },
+              {
+                "questionId": "q-2",
+                "questionText": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+                "answer": "Flat-rate is cleaner and allows cross-functional peer review of simulation hypotheses."
+              },
+              {
+                "questionId": "q-3",
+                "questionText": "Rate the perceived value of the Growth tier at $149/month.",
+                "answer": "5 / 5 — High value for research teams."
+              }
+            ],
+            "reasoning": "Prioritizes custom persona granularity and raw data export formats over entry-level price discounts.",
+            "motivations": [
+              "Granular control over persona attributes",
+              "Verifiable citations in AI Agent Web Search"
+            ],
+            "objections": [
+              "Wants documentation on confidence scoring methodology"
+            ],
+            "confidenceScore": 91,
+            "uncertaintyNote": "High alignment with product capabilities."
+          },
+          {
+            "personaId": "persona-convenience-seekers",
+            "personaName": "Convenience Seekers",
+            "segment": "Time-Constrained & Speed-First Users",
+            "agentCount": 10,
+            "overallReaction": "Positive",
+            "acceptanceScore": 82,
+            "mainTakeaway": "Converts quickly for one-click PDF executive briefs and ready-to-use persona presets that save hours of manual research prep.",
+            "simulatedStatement": "[Simulated Persona Statement] \"If I can walk into a Monday product review with a downloadable PDF brief in five minutes, $149/month is a no-brainer.\"",
+            "answers": [
+              {
+                "questionId": "q-1",
+                "questionText": "Which pricing tier best matches your workflow and budget expectations?",
+                "answer": "Growth ($149/mo)"
+              },
+              {
+                "questionId": "q-2",
+                "questionText": "How do you feel about flat-rate workspace pricing ($149/mo) compared to per-seat pricing ($39/user/mo)?",
+                "answer": "Much simpler—no need to calculate seats or manage licenses."
+              },
+              {
+                "questionId": "q-3",
+                "questionText": "Rate the perceived value of the Growth tier at $149/month.",
+                "answer": "4 / 5 — Great time-saver."
+              }
+            ],
+            "reasoning": "Driven by speed-to-deliverable and zero procurement friction.",
+            "motivations": [
+              "Instant executive-ready PDF reports",
+              "Pre-built simulation templates"
+            ],
+            "objections": [
+              "Does not want complex setup steps before running first test"
+            ],
+            "confidenceScore": 85,
+            "uncertaintyNote": "Low variance across simulated agents."
+          }
+        ],
+        "recommendations": [
+          {
+            "id": "rec-1",
+            "priority": "High",
+            "title": "State explicit numerical quotas on the Explorer Free card",
+            "explanation": "Replace vague \"Limited AI agent usage\" copy with a concrete allowance (e.g., \"5 simulations & 25 AI Agent queries/mo\") to build immediate trust with Value Optimizers.",
+            "expectedImpact": "+18% simulated free-to-paid evaluation trust"
+          },
+          {
+            "id": "rec-2",
+            "priority": "High",
+            "title": "Include 1 sample full-fidelity PDF report download on Explorer",
+            "explanation": "Letting prospective buyers inspect a real exported brief eliminates deliverable uncertainty prior to the $149/mo upgrade.",
+            "expectedImpact": "+24% simulated Growth tier conversion rate"
+          },
+          {
+            "id": "rec-3",
+            "priority": "Medium",
+            "title": "Add an Annual Billing toggle with a 15–20% savings incentive",
+            "explanation": "Finance-conscious teams and Brand Loyalists prefer annual predictability when onboarding a core research platform.",
+            "expectedImpact": "Higher simulated LTV and lower quarterly churn"
+          }
+        ]
+      }
+    },
+    {
+      "id": "sim-sample-ab-02-ws-1794743591865",
+      "workspaceId": "ws-1794743591865",
+      "name": "Landing Hero Messaging A/B Test: Speed vs. Risk Reduction",
+      "type": "ab_testing",
+      "description": "Comparing two hero value propositions for an AI consumer intelligence launch: Option A focuses on \"10x Faster Audience Research in Minutes\" while Option B focuses on \"Understand Your Audience Before Making Your Move.\"",
+      "hypothesis": "Option B (\"Understand Your Audience Before Making Your Move\") will outperform Option A across Quality Seekers and Brand Loyalists by emphasizing decision confidence rather than raw speed hype.",
+      "researchContext": "Website homepage hero copy optimization for B2B founders and product leaders.",
+      "targetAudience": "Founders, Product Managers, Growth Marketers, and UX Researchers",
+      "researchObjectives": "Determine winning headline direction, evaluate credibility perception, and measure segment-by-segment preference.",
+      "typeSpecificData": {
+        "optionADescription": "Option A (Speed Angle): \"Run 10x Faster Customer Research in 60 Seconds. Replace slow surveys with instant AI answers.\"",
+        "optionBDescription": "Option B (Decision Clarity Angle): \"Understand Your Audience Before Making Your Move. Simulate customer reactions, test ideas, explore pricing, and discover opportunities with AI-powered audience intelligence.\"",
+        "comparisonCriteria": "Credibility, clarity of value proposition, emotional resonance, and click-through intent."
+      },
+      "materials": [],
+      "questions": [
+        {
+          "id": "q-ab-1",
+          "text": "Which headline and description makes you trust the platform more?",
+          "type": "single_choice",
+          "required": true,
+          "options": [
+            "Option A (Speed Angle)",
+            "Option B (Decision Clarity Angle)"
+          ]
+        },
+        {
+          "id": "q-ab-2",
+          "text": "Explain why you chose your preferred option and what impression the other option gave you.",
+          "type": "free_response",
+          "required": true,
+          "options": []
+        }
+      ],
+      "selectedPersonas": [
+        {
+          "personaId": "persona-quality-seekers",
+          "personaName": "Quality Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-brand-loyalists",
+          "personaName": "Brand Loyalists",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-experience-seekers",
+          "personaName": "Experience Seekers",
+          "agentCount": 10
+        },
+        {
+          "personaId": "persona-convenience-seekers",
+          "personaName": "Convenience Seekers",
+          "agentCount": 10
+        }
+      ],
+      "status": "Completed",
+      "stage": "Completed",
+      "progress": 100,
+      "startedAt": "2026-11-13T14:00:00Z",
+      "completedAt": "2026-11-13T14:01:10Z",
+      "estimatedSecondsRemaining": 0,
+      "isSample": true,
+      "results": {
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "aiEngineMode": "simulated-engine",
+        "generatedAt": "2026-11-13T14:01:10Z",
+        "executiveSummary": {
+          "mainFinding": "Option B (\"Understand Your Audience Before Making Your Move\") won decisively with a 76% simulated preference score vs. 24% for Option A.",
+          "overallReaction": "Simulated personas perceived Option B as strategic, trustworthy, and transparent, whereas Option A triggered skepticism about superficial \"60-second AI hype\" among Quality Seekers and Brand Loyalists.",
+          "importantOpportunities": [
+            "Lead with Option B as the primary hero headline while weaving speed-to-insight into the secondary How It Works steps",
+            "Explicitly label outputs as simulated audience intelligence to reinforce methodological honesty"
+          ],
+          "mainConcerns": [
+            "Option A alienated researchers who felt \"Replace surveys in 60 seconds\" sounded like generic AI exaggeration"
+          ]
+        },
+        "sentimentOverview": {
+          "positive": 79,
+          "neutral": 14,
+          "negative": 7
+        },
+        "audiencePreferences": [
+          {
+            "label": "Strategic decision-making framing (Option B)",
+            "score": 86,
+            "detail": "Resonates with high-stakes business decisions like pricing, positioning, and product launches."
+          },
+          {
+            "label": "Concrete capability list (ideas, pricing, opportunities)",
+            "score": 81,
+            "detail": "Helps visitors immediately picture what they can simulate on day one."
+          }
+        ],
+        "objectionsAndConcerns": [
+          {
+            "objection": "Skepticism toward \"10x faster in 60 seconds\" hype claims in Option A",
+            "severity": "High",
+            "frequencyPct": 68,
+            "mitigation": "Avoid hyperbolic multipliers in top-level headlines; demonstrate speed through an interactive live demo instead."
+          }
+        ],
+        "opportunities": [
+          {
+            "title": "Pair Option B Headline with Interactive Live Demo",
+            "impact": "High",
+            "description": "Satisfies both Quality Seekers (who want depth) and Convenience Seekers (who experience the speed firsthand)."
+          }
+        ],
+        "abComparison": {
+          "optionALabel": "Option A: 10x Faster Research in 60s",
+          "optionBLabel": "Option B: Understand Your Audience Before Making Your Move",
+          "optionAScore": 58,
+          "optionBScore": 87,
+          "optionAStrengths": [
+            "Immediately communicates speed and low time commitment",
+            "Appeals to time-strapped Convenience Seekers scanning quickly"
+          ],
+          "optionAWeaknesses": [
+            "Sounds like generic AI marketing hyperbole (\"10x in 60 seconds\")",
+            "Triggers distrust among researchers and executives who care about rigor"
+          ],
+          "optionBStrengths": [
+            "Frames the product around high-value strategic outcomes and risk reduction",
+            "Clearly enumerates concrete use cases (ideas, pricing, opportunities)",
+            "Builds institutional trust and authority"
+          ],
+          "optionBWeaknesses": [
+            "Slightly longer description requires clean typographic hierarchy"
+          ],
+          "personaPreferences": [
+            {
+              "personaName": "Quality Seekers",
+              "preferredOption": "Option B",
+              "rationale": "Option B respects the complexity of audience intelligence and avoids exaggerated speed claims."
+            },
+            {
+              "personaName": "Brand Loyalists",
+              "preferredOption": "Option B",
+              "rationale": "Sounds like an authoritative, dependable enterprise software partner."
+            },
+            {
+              "personaName": "Experience Seekers",
+              "preferredOption": "Option B",
+              "rationale": "More inspiring and human-centric framing."
+            },
+            {
+              "personaName": "Convenience Seekers",
+              "preferredOption": "Option A",
+              "rationale": "Liked the explicit 60-second promise, though still rated Option B highly for clarity."
+            }
+          ],
+          "overallVerdict": "Deploy Option B (\"Understand Your Audience Before Making Your Move\") as the flagship hero lockup. Capture Option A’s speed advantage implicitly via the interactive demo."
+        },
+        "personaBreakdown": [
+          {
+            "personaId": "persona-quality-seekers",
+            "personaName": "Quality Seekers",
+            "segment": "High-Precision & Craftsmanship Buyers",
+            "agentCount": 10,
+            "overallReaction": "Positive",
+            "acceptanceScore": 91,
+            "mainTakeaway": "Strongly endorses Option B for its grounded, strategic tone.",
+            "simulatedStatement": "[Simulated Persona Statement] \"Option B speaks to actual product strategy—testing pricing and reactions before committing capital. Option A sounds like another disposable wrapper.\"",
+            "answers": [
+              {
+                "questionId": "q-ab-1",
+                "questionText": "Which headline and description makes you trust the platform more?",
+                "answer": "Option B (Decision Clarity Angle)"
+              },
+              {
+                "questionId": "q-ab-2",
+                "questionText": "Explain why you chose your preferred option and what impression the other option gave you.",
+                "answer": "Option B specifies concrete research domains (ideas, pricing, opportunities) without over-promising."
+              }
+            ],
+            "reasoning": "Associates restrained, specific language with higher underlying model quality.",
+            "motivations": [
+              "Decision accuracy",
+              "Methodological transparency"
+            ],
+            "objections": [
+              "Dislikes \"10x\" marketing clichés"
+            ],
+            "confidenceScore": 93,
+            "uncertaintyNote": "Very high consensus across simulated agents."
+          },
+          {
+            "personaId": "persona-convenience-seekers",
+            "personaName": "Convenience Seekers",
+            "agentCount": 10,
+            "segment": "Time-Constrained & Speed-First Users",
+            "overallReaction": "Positive",
+            "acceptanceScore": 81,
+            "mainTakeaway": "Split between Option A’s speed promise and Option B’s clear use-case list.",
+            "simulatedStatement": "[Simulated Persona Statement] \"I like knowing it only takes a minute from Option A, but Option B tells me right away that I can test my pricing tiers today.\"",
+            "answers": [
+              {
+                "questionId": "q-ab-1",
+                "questionText": "Which headline and description makes you trust the platform more?",
+                "answer": "Option B (with 60% preference, 40% Option A)"
+              },
+              {
+                "questionId": "q-ab-2",
+                "questionText": "Explain why you chose your preferred option and what impression the other option gave you.",
+                "answer": "Knowing the exact use cases saves me from having to guess what the tool actually tests."
+              }
+            ],
+            "reasoning": "Values immediate clarity on what tasks the software handles.",
+            "motivations": [
+              "Fast setup",
+              "Actionable pricing and idea feedback"
+            ],
+            "objections": [
+              "Wants to try the interactive agent right from the hero"
+            ],
+            "confidenceScore": 84,
+            "uncertaintyNote": "Moderate preference split between speed and clarity."
+          }
+        ],
+        "recommendations": [
+          {
+            "id": "rec-ab-1",
+            "priority": "High",
+            "title": "Adopt Option B for the public landing page Hero",
+            "explanation": "Option B maximizes trust across skeptical researchers and founders while clearly stating the platform’s core jobs-to-be-done.",
+            "expectedImpact": "+31% simulated engagement with primary CTA"
+          },
+          {
+            "id": "rec-ab-2",
+            "priority": "Medium",
+            "title": "Pair primary CTA with a direct \"Try Interactive Agent\" secondary button",
+            "explanation": "Gives Convenience Seekers immediate proof of speed without needing hyperbolic headline claims.",
+            "expectedImpact": "Higher interactive demo completion rate"
+          }
+        ]
+      }
+    }
+  ],
+  "conversations": [
+    {
+      "id": "conv-seed-1",
+      "workspaceId": "ws-default",
+      "title": "Pricing Tier Objections & ROI Anchoring",
+      "simulationId": "sim-sample-pricing-01",
+      "personaId": null,
+      "createdAt": "2026-11-12T11:00:00Z",
+      "updatedAt": "2026-11-12T11:02:00Z",
+      "messages": [
+        {
+          "id": "msg-seed-1",
+          "role": "user",
+          "content": "What are the biggest customer concerns in our Pricing Analysis simulation?",
+          "timestamp": "2026-11-12T11:00:30Z"
+        },
+        {
+          "id": "msg-seed-2",
+          "role": "assistant",
+          "content": "Based on the simulated persona responses in \"Clamir Studio Pro — Usage vs. Seat Pricing Analysis\":\n\n1. **Step-Up Gap ($0 to $149/mo):** Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5–8 studies a month.\n2. **Deliverable Verification:** Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. **Quota Clarity:** Personas recommended replacing \"Limited AI agent usage\" with an explicit monthly query number (e.g., 25 AI Agent queries/month).\n\n*Note: These insights reflect simulated AI persona evaluations, not actual human survey respondents.*",
+          "timestamp": "2026-11-12T11:01:00Z",
+          "webSearchUsed": false
+        }
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "id": "rep-seed-1",
+      "workspaceId": "ws-default",
+      "simulationId": "sim-sample-pricing-01",
+      "simulationName": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "title": "Clamir Studio Pro — Pricing Analysis Brief (PDF)",
+      "format": "PDF",
+      "sizeLabel": "42 KB",
+      "createdAt": "2026-11-12T10:25:00Z",
+      "summarySnippet": "78% of simulated personas favored the flat-rate workspace model over per-seat pricing, with strong conversion intent on the $149/mo Growth tier when positioned against traditional $2,500+ research panels."
+    },
+    {
+      "id": "rep-seed-2",
+      "workspaceId": "ws-default",
+      "simulationId": "sim-sample-ab-02",
+      "simulationName": "Landing Hero Messaging A/B Test: Speed vs. Risk Reduction",
+      "title": "Landing Hero Messaging A/B Data Export (JSON)",
+      "format": "JSON",
+      "sizeLabel": "28 KB",
+      "createdAt": "2026-11-13T14:05:00Z",
+      "summarySnippet": "Option B (\"Understand Your Audience Before Making Your Move\") won decisively with a 76% simulated preference score vs. 24% for Option A."
+    }
+  ],
+  "recentSearches": [
+    {
+      "id": "rs-seed-1",
+      "workspaceId": "ws-default",
+      "query": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "category": "Simulation",
+      "targetId": "sim-sample-pricing-01",
+      "timestamp": "2026-11-13T16:10:00Z"
+    },
+    {
+      "id": "rs-seed-2",
+      "workspaceId": "ws-default",
+      "query": "Landing Hero Messaging A/B Test: Speed vs. Risk Reduction",
+      "category": "Simulation",
+      "targetId": "sim-sample-ab-02",
+      "timestamp": "2026-11-13T17:20:00Z"
+    }
+  ],
+  "platformConfig": {
+    "pricingPlans": [
+      {
+        "id": "Explorer",
+        "name": "Explorer",
+        "priceLabel": "Free",
+        "billingPeriod": "forever",
+        "audienceTag": "For individuals, teams & new researchers",
+        "description": "Validate product ideas, create custom audiences, and access full Accounts & Reports.",
+        "features": [
+          "Core simulations (up to 10 runs/month)",
+          "Custom target audience & persona creation",
+          "Full Accounts & Reports workspace access",
+          "Downloadable PDF, JSON, CSV & TXT reports",
+          "Context & AI Research Agent access"
+        ],
+        "simulationsLimit": 10
+      },
+      {
+        "id": "Growth",
+        "name": "Growth",
+        "priceLabel": "$149",
+        "billingPeriod": "/month",
+        "audienceTag": "For scaling product, marketing & insights teams",
+        "description": "Unlimited audience intelligence, multi-persona comparisons, and live web-grounded research.",
+        "features": [
+          "Unlimited monthly simulations",
+          "Full custom audience & persona library",
+          "Full Accounts & Reports with batch exports",
+          "AI Research Agent with live Web Search grounding",
+          "Multi-option A/B & pricing elasticity matrices"
+        ],
+        "simulationsLimit": 500
+      },
+      {
+        "id": "Enterprise",
+        "name": "Enterprise",
+        "priceLabel": "Custom",
+        "billingPeriod": "annual billing",
+        "audienceTag": "For global organizations & research agencies",
+        "description": "Dedicated simulation throughput, multi-workspace governance, and bespoke segment calibration.",
+        "features": [
+          "Custom usage limits & dedicated concurrency",
+          "Multi-workspace team access & role controls",
+          "Bespoke industry audience calibration",
+          "Advanced API & data warehouse integrations",
+          "Dedicated enterprise research strategist"
+        ],
+        "simulationsLimit": 10000
+      }
+    ],
+    "allowWebSearch": true,
+    "defaultAgentsPerPersona": 5,
+    "updatedAt": "2026-11-14T22:15:00Z"
+  },
+  "deletedBuiltInPersonaIdsByWorkspace": {}
+}

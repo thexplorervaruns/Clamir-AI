@@ -37,7 +37,7 @@ export function exportSimulationReport(
       `Status: ${simulation.status}`,
       `Target Audience: ${simulation.targetAudience}`,
       `Hypothesis: ${simulation.hypothesis}`,
-      `Research Objectives: ${simulation.researchObjectives}`,
+      ...(simulation.researchObjectives ? [simulation.researchObjectives] : []),
       '',
       '--- SELECTED PERSONAS ---',
       ...simulation.selectedPersonas.map(

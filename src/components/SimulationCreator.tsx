@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -54,17 +54,19 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Step 1: Setup & Type-Specific Fields
+  // Step 1: Setup & Type-Specific Fields — All text fields start completely empty
   const [simType, setSimType] = useState<SimulationTypeId>(initialType);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [hypothesis, setHypothesis] = useState('');
-  const [researchContext, setResearchContext] = useState('');
-  // Unrestricted custom target audience definition (no forced restriction to Startup Founders / Product Managers)
-  const [targetAudience, setTargetAudience] = useState('');
   const [researchObjectives, setResearchObjectives] = useState('');
+  const [processNotes, setProcessNotes] = useState('');
+  const [comparisonNotes, setComparisonNotes] = useState('');
+  const [resultsNotes, setResultsNotes] = useState('');
+  const [researchContext, setResearchContext] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
 
-  // Inline Custom Target Audience / Persona Creator Modal / Drawer (available across Step 1 and Step 4)
+  // Inline Custom Target Audience / Persona Creator Modal — All text & numerical fields start empty
   const [showCustomAudienceCreator, setShowCustomAudienceCreator] = useState(false);
   const [customPersonaName, setCustomPersonaName] = useState('');
   const [customPersonaSegment, setCustomPersonaSegment] = useState('');
@@ -72,36 +74,28 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   const [customPersonaContext, setCustomPersonaContext] = useState('');
   const [customPriceSensitivity, setCustomPriceSensitivity] = useState<PriceSensitivity>('Moderate');
   const [customDecisionSpeed, setCustomDecisionSpeed] = useState<DecisionSpeed>('Deliberate');
-  const [customBrandLoyalty, setCustomBrandLoyalty] = useState<number>(65);
-  const [customAgentCount, setCustomAgentCount] = useState<number>(5);
+  const [customBrandLoyalty, setCustomBrandLoyalty] = useState<string>('');
+  const [customAgentCount, setCustomAgentCount] = useState<string>('');
   const [savingCustomPersona, setSavingCustomPersona] = useState(false);
 
-  // Type-specific state
+  // Type-specific state — All prewritten content removed
   const [optionADescription, setOptionADescription] = useState('');
   const [optionBDescription, setOptionBDescription] = useState('');
-  const [comparisonCriteria, setComparisonCriteria] = useState('Clarity, perceived value, trust, and conversion intent');
+  const [comparisonCriteria, setComparisonCriteria] = useState('');
 
   const [marketOrIndustry, setMarketOrIndustry] = useState('');
   const [productOrService, setProductOrService] = useState('');
-  const [questionsToExplore, setQuestionsToExplore] = useState<string[]>([
-    'What are the biggest unmet pain points in your current workflow?',
-    'What would trigger you to switch from your existing provider?',
-  ]);
+  const [questionsToExplore, setQuestionsToExplore] = useState<string[]>([]);
   const [newExploreQuestion, setNewExploreQuestion] = useState('');
 
   const [websiteOrProductUrl, setWebsiteOrProductUrl] = useState('');
-  const [userTask, setUserTask] = useState('Complete onboarding and identify the primary call-to-action within 60 seconds');
-  const [usabilityQuestions, setUsabilityQuestions] = useState<string[]>([
-    'Is the navigation hierarchy immediately clear?',
-    'Where did you experience friction while completing the task?',
-  ]);
+  const [userTask, setUserTask] = useState('');
+  const [usabilityQuestions, setUsabilityQuestions] = useState<string[]>([]);
   const [newUsabilityQuestion, setNewUsabilityQuestion] = useState('');
 
   const [currency, setCurrency] = useState('USD ($)');
   const [pricingTiers, setPricingTiers] = useState<PricingTierOption[]>([
-    { id: 'tier-1', name: 'Starter', price: '$0', billingCycle: 'month', features: 'Core features, 3 projects' },
-    { id: 'tier-2', name: 'Pro', price: '$49', billingCycle: 'month', features: 'Unlimited projects, exports, priority support' },
-    { id: 'tier-3', name: 'Team', price: '$149', billingCycle: 'month', features: '5 seats, custom branding, API access' },
+    { id: 'tier-1', name: '', price: '', billingCycle: 'month', features: '' },
   ]);
 
   const [customerSegment, setCustomerSegment] = useState('');
@@ -110,9 +104,9 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   const [customFields, setCustomFields] = useState<CustomFormField[]>([
     {
       id: 'cf-1',
-      label: 'Primary Evaluation Context',
+      label: '',
       fieldType: 'short_text',
-      value: 'Product & Audience Validation',
+      value: '',
     },
   ]);
 
@@ -121,33 +115,21 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   const [urlInput, setUrlInput] = useState('');
   const [extractingUrl, setExtractingUrl] = useState(false);
 
-  // Step 3: Question Battery
-  const [questions, setQuestions] = useState<SimulationQuestion[]>([]);
+  // Step 3: Question Battery — Starts with a blank question, no prewritten text
+  const [questions, setQuestions] = useState<SimulationQuestion[]>([
+    {
+      id: 'q-init-1',
+      text: '',
+      type: 'free_response',
+      required: true,
+      options: [],
+    },
+  ]);
+  const [questionOptionsText, setQuestionOptionsText] = useState<Record<string, string>>({});
 
-  // Step 4: Selected Audience (Initialize from available workspace personas if present)
-  const [selectedPersonas, setSelectedPersonas] = useState<SelectedPersonaConfig[]>(() =>
-    personas.slice(0, 3).map((p) => ({
-      personaId: p.id,
-      personaName: p.name,
-      agentCount: 5,
-    }))
-  );
-
-  // Sync defaults when simulation type changes
-  useEffect(() => {
-    const meta = SIMULATION_TYPES_META.find((m) => m.id === simType) || SIMULATION_TYPES_META[0];
-    if (!hypothesis) setHypothesis(meta.defaultHypothesis);
-    if (!researchObjectives) setResearchObjectives(meta.defaultObjectives);
-    setQuestions(
-      meta.starterQuestions.map((sq, idx) => ({
-        id: `q-init-${idx}-${Date.now()}`,
-        text: sq.text,
-        type: sq.type,
-        required: true,
-        options: [...sq.options],
-      }))
-    );
-  }, [simType]);
+  // Step 4: Selected Audience & Raw String State for Numerical Agent Counts
+  const [selectedPersonas, setSelectedPersonas] = useState<SelectedPersonaConfig[]>([]);
+  const [agentCountInputs, setAgentCountInputs] = useState<Record<string, string>>({});
 
   // Create and attach a custom target audience persona from anywhere in the simulation flow
   const handleCreateCustomAudienceInline = async (e: React.FormEvent) => {
@@ -157,14 +139,13 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     setError(null);
 
     const cleanName = customPersonaName.trim();
-    const cleanSegment = customPersonaSegment.trim() || targetAudience.trim() || 'Custom Defined Audience';
-    const cleanTagline =
-      customPersonaTagline.trim() ||
-      `Custom target audience evaluating ${name.trim() || 'this simulation'} based on real-world fit.`;
-    const cleanContext =
-      customPersonaContext.trim() ||
-      researchContext.trim() ||
-      `Evaluates offerings within ${cleanSegment}.`;
+    const cleanSegment = customPersonaSegment.trim();
+    const cleanTagline = customPersonaTagline.trim();
+    const cleanContext = customPersonaContext.trim();
+    const parsedLoyalty =
+      customBrandLoyalty.trim() === '' ? 0 : Number(customBrandLoyalty);
+    const parsedAgents =
+      customAgentCount.trim() === '' ? 1 : Math.max(1, Number(customAgentCount));
 
     try {
       const res = await fetch('/api/personas', {
@@ -179,17 +160,17 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           tagline: cleanTagline,
           description: cleanTagline,
           avatarCode: cleanName.slice(0, 2).toUpperCase(),
-          tags: ['Custom Audience', cleanSegment],
-          characteristics: [`Evaluates solutions from a ${cleanSegment} perspective`],
-          preferences: ['Clear value alignment', 'Frictionless onboarding'],
-          motivations: ['Solving high-priority operational or personal needs'],
-          purchasingBehavior: 'Compares options against direct needs and budget constraints.',
-          decisionFactors: ['Direct relevance', 'Time-to-value', 'Total cost'],
-          concerns: ['Hidden complexity', 'Unclear ROI'],
+          tags: cleanSegment ? [cleanSegment] : [],
+          characteristics: [],
+          preferences: [],
+          motivations: [],
+          purchasingBehavior: '',
+          decisionFactors: [],
+          concerns: [],
           context: cleanContext,
           priceSensitivity: customPriceSensitivity,
           decisionSpeed: customDecisionSpeed,
-          brandLoyalty: customBrandLoyalty,
+          brandLoyalty: parsedLoyalty,
         }),
       });
 
@@ -202,29 +183,35 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           {
             personaId: created.id,
             personaName: created.name,
-            agentCount: Math.max(1, Math.min(50, customAgentCount || 5)),
+            agentCount: parsedAgents,
           },
         ]);
-        if (!targetAudience.trim()) {
-          setTargetAudience(`${cleanName} (${cleanSegment})`);
-        }
+        setAgentCountInputs((prev) => ({
+          ...prev,
+          [created.id]: customAgentCount.trim(),
+        }));
       } else {
-        // Fallback: add directly to selectedPersonas as an ad-hoc custom audience
         const adHocId = `custom-aud-${Date.now()}`;
         setSelectedPersonas((prev) => [
           ...prev,
           {
             personaId: adHocId,
             personaName: cleanName,
-            agentCount: Math.max(1, Math.min(50, customAgentCount || 5)),
+            agentCount: parsedAgents,
           },
         ]);
+        setAgentCountInputs((prev) => ({
+          ...prev,
+          [adHocId]: customAgentCount.trim(),
+        }));
       }
 
       setCustomPersonaName('');
       setCustomPersonaSegment('');
       setCustomPersonaTagline('');
       setCustomPersonaContext('');
+      setCustomBrandLoyalty('');
+      setCustomAgentCount('');
       setShowCustomAudienceCreator(false);
     } finally {
       setSavingCustomPersona(false);
@@ -321,7 +308,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     }
   };
 
-  // Step 3: Question Battery helpers
+  // Step 3: Question Battery helpers (no automatic options injected)
   const handleAddQuestion = () => {
     setQuestions((prev) => [
       ...prev,
@@ -337,46 +324,34 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
 
   const handleUpdateQuestion = (id: string, patch: Partial<SimulationQuestion>) => {
     setQuestions((prev) =>
-      prev.map((q) => {
-        if (q.id !== id) return q;
-        const updated = { ...q, ...patch };
-        if (
-          patch.type &&
-          ['single_choice', 'multiple_choice', 'ranking'].includes(patch.type) &&
-          updated.options.length === 0
-        ) {
-          updated.options = ['Option 1', 'Option 2', 'Option 3'];
-        }
-        if (patch.type === 'rating_scale' && updated.options.length === 0) {
-          updated.options = ['1 - Low', '2', '3', '4', '5 - High'];
-        }
-        if (patch.type === 'yes_no') {
-          updated.options = ['Yes', 'No'];
-        }
-        if (patch.type === 'matrix' && updated.options.length === 0) {
-          updated.options = ['Ease of Use: Low/Med/High', 'Value for Money: Low/Med/High'];
-        }
-        return updated;
-      })
+      prev.map((q) => (q.id === id ? { ...q, ...patch } : q))
     );
   };
 
-  // Step 4: Audience selection helpers
+  // Step 4: Audience selection helpers (numerical inputs stay blank when cleared)
   const togglePersonaSelection = (persona: Persona) => {
     setSelectedPersonas((prev) => {
       const exists = prev.find((p) => p.personaId === persona.id);
       if (exists) {
         return prev.filter((p) => p.personaId !== persona.id);
       }
-      return [...prev, { personaId: persona.id, personaName: persona.name, agentCount: 5 }];
+      return [...prev, { personaId: persona.id, personaName: persona.name, agentCount: 1 }];
     });
   };
 
-  const updateAgentCount = (personaId: string, count: number) => {
-    const clamped = Math.max(1, Math.min(50, count));
-    setSelectedPersonas((prev) =>
-      prev.map((p) => (p.personaId === personaId ? { ...p, agentCount: clamped } : p))
-    );
+  const handleAgentCountInputChange = (personaId: string, rawValue: string) => {
+    setAgentCountInputs((prev) => ({
+      ...prev,
+      [personaId]: rawValue,
+    }));
+    if (rawValue.trim() !== '') {
+      const num = Number(rawValue);
+      if (!Number.isNaN(num)) {
+        setSelectedPersonas((prev) =>
+          prev.map((p) => (p.personaId === personaId ? { ...p, agentCount: num } : p))
+        );
+      }
+    }
   };
 
   // Step Validation
@@ -414,12 +389,12 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     if (currentStep === 4) {
       if (selectedPersonas.length === 0) {
         if (targetAudience.trim()) {
-          // Automatically synthesize a custom audience persona from the user's defined Target Audience
+          const customId = `custom-target-${Date.now()}`;
           setSelectedPersonas([
             {
-              personaId: `custom-target-${Date.now()}`,
+              personaId: customId,
               personaName: targetAudience.trim(),
-              agentCount: 5,
+              agentCount: 1,
             },
           ]);
           return true;
@@ -442,16 +417,27 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     setSubmitting(true);
     setError(null);
     try {
-      const effectivePersonas =
+      const effectivePersonas = (
         selectedPersonas.length > 0
           ? selectedPersonas
           : [
               {
                 personaId: `custom-target-${Date.now()}`,
-                personaName: targetAudience.trim() || 'Custom Defined Audience',
-                agentCount: 5,
+                personaName: targetAudience.trim() || 'Custom Audience',
+                agentCount: 1,
               },
-            ];
+            ]
+      ).map((p) => {
+        const rawVal = agentCountInputs[p.personaId];
+        const parsed =
+          rawVal !== undefined && rawVal.trim() !== ''
+            ? Math.max(1, Number(rawVal) || 1)
+            : Math.max(1, p.agentCount || 1);
+        return {
+          ...p,
+          agentCount: parsed,
+        };
+      });
 
       const res = await fetch('/api/simulations', {
         method: 'POST',
@@ -463,7 +449,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           name: name.trim(),
           type: simType,
           description: description.trim(),
-          hypothesis: hypothesis.trim() || 'Target audience will respond positively to the proposed offering.',
+          hypothesis: hypothesis.trim(),
           researchContext: researchContext.trim(),
           targetAudience:
             targetAudience.trim() ||
@@ -472,7 +458,9 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           typeSpecificData: {
             optionADescription,
             optionBDescription,
-            comparisonCriteria,
+            comparisonCriteria: comparisonCriteria.trim() || comparisonNotes.trim(),
+            processNotes: processNotes.trim(),
+            resultsNotes: resultsNotes.trim(),
             marketOrIndustry,
             productOrService,
             questionsToExplore,
@@ -503,7 +491,12 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     }
   };
 
-  const totalAgents = selectedPersonas.reduce((sum, p) => sum + p.agentCount, 0);
+  const totalAgents = selectedPersonas.reduce((sum, p) => {
+    const raw = agentCountInputs[p.personaId];
+    if (raw === undefined || raw.trim() === '') return sum;
+    const val = Number(raw);
+    return sum + (Number.isNaN(val) ? 0 : val);
+  }, 0);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -522,7 +515,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             Create Audience Simulation
           </h1>
           <p className="text-xs text-[#6B7280] mt-0.5">
-            Define any custom target audience, research context, question battery, and AI agent panel.
+            Manually configure your target audience, hypothesis, objectives, process, comparisons, and question battery.
           </p>
         </div>
 
@@ -566,12 +559,11 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               ACTIVE AGENTS: {selectedPersonas.length} Audiences ({totalAgents} AI Agents)
             </span>
           </span>
-          <span className="text-[#6B7280]">
-            Context:{' '}
-            <strong className="text-[#111827]">
-              {researchContext.trim() || targetAudience.trim() || 'Custom Simulation Context'}
-            </strong>
-          </span>
+          {researchContext.trim() && (
+            <span className="text-[#6B7280]">
+              Context: <strong className="text-[#111827]">{researchContext.trim()}</strong>
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -607,7 +599,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           {/* Simulation Type Selector (7 Types) */}
           <div className="bg-white border border-[#E5E7EB] rounded-lg p-5">
             <label className="block text-xs font-semibold text-[#111827] mb-3">
-              Select Simulation Type (All 7 Modes Support Custom Target Audiences)
+              Select Simulation Type
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               {SIMULATION_TYPES_META.map((meta) => {
@@ -633,10 +625,10 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             </div>
           </div>
 
-          {/* Core & Type-Specific Setup Fields */}
+          {/* Core & Type-Specific Setup Fields (All Blank, Manual Entry Only) */}
           <div className="bg-white border border-[#E5E7EB] rounded-lg p-5 space-y-5">
             <h2 className="text-sm font-bold text-[#111827] border-b border-[#E5E7EB] pb-2.5">
-              {SIMULATION_TYPES_META.find((m) => m.id === simType)?.name} — Configuration &amp; Custom Target Audience
+              {SIMULATION_TYPES_META.find((m) => m.id === simType)?.name} — Configuration
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -656,7 +648,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g., Q4 Consumer Subscription & Packaging Validation"
                   className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
@@ -664,7 +655,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-semibold text-[#111827]">
-                    Define Custom Target Audience (Unrestricted)
+                    Target Audience
                   </label>
                   <button
                     type="button"
@@ -678,32 +669,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="text"
                   value={targetAudience}
                   onChange={(e) => setTargetAudience(e.target.value)}
-                  placeholder="Define any audience (e.g., Retail Shoppers, Healthcare Nurses, Indie Creators, Enterprise CFOs)..."
                   className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-mono text-[#6B7280]">Quick examples:</span>
-                  {[
-                    'D2C E-Commerce Shoppers',
-                    'Healthcare Clinicians',
-                    'Gen-Z Mobile Users',
-                    'Small Business Owners',
-                    'Enterprise Security Buyers',
-                  ].map((sampleAud) => (
-                    <button
-                      key={sampleAud}
-                      type="button"
-                      onClick={() =>
-                        setTargetAudience((prev) =>
-                          prev.trim() ? `${prev.trim()}, ${sampleAud}` : sampleAud
-                        )
-                      }
-                      className="px-2 py-0.5 text-[10px] bg-[#F9FAFB] border border-[#E5E7EB] rounded text-[#6B7280] hover:text-[#111827] hover:border-[#000000] cursor-pointer"
-                    >
-                      + {sampleAud}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
@@ -719,7 +686,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the product, concept, campaign, or business decision being evaluated..."
                 className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
               />
             </div>
@@ -736,7 +702,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       rows={3}
                       value={optionADescription}
                       onChange={(e) => setOptionADescription(e.target.value)}
-                      placeholder="Describe Option A (e.g., current headline, feature bundle A, design A)..."
                       className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
@@ -748,20 +713,18 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       rows={3}
                       value={optionBDescription}
                       onChange={(e) => setOptionBDescription(e.target.value)}
-                      placeholder="Describe Option B (e.g., challenger headline, feature bundle B, design B)..."
                       className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#111827] mb-1">
-                    What should be compared?
+                    Comparisons Criteria
                   </label>
                   <input
                     type="text"
                     value={comparisonCriteria}
                     onChange={(e) => setComparisonCriteria(e.target.value)}
-                    placeholder="e.g., Value clarity, trust, willingness to click"
                     className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -780,7 +743,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={marketOrIndustry}
                       onChange={(e) => setMarketOrIndustry(e.target.value)}
-                      placeholder="e.g., Consumer Wellness, FinTech, B2B Operations"
                       className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
@@ -792,7 +754,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={productOrService}
                       onChange={(e) => setProductOrService(e.target.value)}
-                      placeholder="e.g., Personalized Nutrition Subscription"
                       className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
@@ -801,26 +762,27 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   <label className="block text-xs font-semibold text-[#111827] mb-1.5">
                     Questions to Explore
                   </label>
-                  <div className="space-y-2 mb-2">
-                    {questionsToExplore.map((q, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 border border-[#E5E7EB] rounded-md text-xs">
-                        <span>{q}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQuestionsToExplore((prev) => prev.filter((_, i) => i !== idx))}
-                          className="text-[#6B7280] hover:text-red-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  {questionsToExplore.length > 0 && (
+                    <div className="space-y-2 mb-2">
+                      {questionsToExplore.map((q, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 border border-[#E5E7EB] rounded-md text-xs">
+                          <span>{q}</span>
+                          <button
+                            type="button"
+                            onClick={() => setQuestionsToExplore((prev) => prev.filter((_, i) => i !== idx))}
+                            className="text-[#6B7280] hover:text-red-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={newExploreQuestion}
                       onChange={(e) => setNewExploreQuestion(e.target.value)}
-                      placeholder="Add custom market exploration question..."
                       className="flex-1 px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md"
                     />
                     <button
@@ -852,7 +814,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={websiteOrProductUrl}
                       onChange={(e) => setWebsiteOrProductUrl(e.target.value)}
-                      placeholder="https://example.com/onboarding"
                       className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
@@ -864,7 +825,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={userTask}
                       onChange={(e) => setUserTask(e.target.value)}
-                      placeholder="e.g., Find pricing comparison and start a 14-day trial"
                       className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
@@ -873,26 +833,27 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   <label className="block text-xs font-semibold text-[#111827] mb-1.5">
                     Usability Questions
                   </label>
-                  <div className="space-y-2 mb-2">
-                    {usabilityQuestions.map((uq, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 border border-[#E5E7EB] rounded-md text-xs">
-                        <span>{uq}</span>
-                        <button
-                          type="button"
-                          onClick={() => setUsabilityQuestions((prev) => prev.filter((_, i) => i !== idx))}
-                          className="text-[#6B7280] hover:text-red-600 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  {usabilityQuestions.length > 0 && (
+                    <div className="space-y-2 mb-2">
+                      {usabilityQuestions.map((uq, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 bg-white px-3 py-1.5 border border-[#E5E7EB] rounded-md text-xs">
+                          <span>{uq}</span>
+                          <button
+                            type="button"
+                            onClick={() => setUsabilityQuestions((prev) => prev.filter((_, i) => i !== idx))}
+                            className="text-[#6B7280] hover:text-red-600 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={newUsabilityQuestion}
                       onChange={(e) => setNewUsabilityQuestion(e.target.value)}
-                      placeholder="Add usability question..."
                       className="flex-1 px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md"
                     />
                     <button
@@ -920,7 +881,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     <label className="block text-xs font-semibold text-[#111827]">
                       Pricing Tiers &amp; Currency
                     </label>
-                    <p className="text-[11px] text-[#6B7280]">Add or remove pricing tiers to test elasticity across your custom audiences.</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <select
@@ -940,10 +900,10 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                           ...prev,
                           {
                             id: `tier-${Date.now()}`,
-                            name: `Tier ${prev.length + 1}`,
-                            price: '$99',
+                            name: '',
+                            price: '',
                             billingCycle: 'month',
-                            features: 'Included tier features',
+                            features: '',
                           },
                         ])
                       }
@@ -958,43 +918,49 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                 <div className="space-y-2.5">
                   {pricingTiers.map((tier) => (
                     <div key={tier.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 border border-[#E5E7EB] rounded-md items-center">
-                      <input
-                        type="text"
-                        value={tier.name}
-                        onChange={(e) =>
-                          setPricingTiers((prev) =>
-                            prev.map((t) => (t.id === tier.id ? { ...t, name: e.target.value } : t))
-                          )
-                        }
-                        placeholder="Tier Name"
-                        className="sm:col-span-3 px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
-                      />
-                      <input
-                        type="text"
-                        value={tier.price}
-                        onChange={(e) =>
-                          setPricingTiers((prev) =>
-                            prev.map((t) => (t.id === tier.id ? { ...t, price: e.target.value } : t))
-                          )
-                        }
-                        placeholder="Price (e.g. $49)"
-                        className="sm:col-span-2 px-2.5 py-1.5 text-xs font-mono border border-[#E5E7EB] rounded"
-                      />
-                      <input
-                        type="text"
-                        value={tier.features}
-                        onChange={(e) =>
-                          setPricingTiers((prev) =>
-                            prev.map((t) => (t.id === tier.id ? { ...t, features: e.target.value } : t))
-                          )
-                        }
-                        placeholder="Key features included..."
-                        className="sm:col-span-6 px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
-                      />
+                      <div className="sm:col-span-3">
+                        <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5">Tier Name</label>
+                        <input
+                          type="text"
+                          value={tier.name}
+                          onChange={(e) =>
+                            setPricingTiers((prev) =>
+                              prev.map((t) => (t.id === tier.id ? { ...t, name: e.target.value } : t))
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5">Price</label>
+                        <input
+                          type="text"
+                          value={tier.price}
+                          onChange={(e) =>
+                            setPricingTiers((prev) =>
+                              prev.map((t) => (t.id === tier.id ? { ...t, price: e.target.value } : t))
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#E5E7EB] rounded"
+                        />
+                      </div>
+                      <div className="sm:col-span-6">
+                        <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5">Features</label>
+                        <input
+                          type="text"
+                          value={tier.features}
+                          onChange={(e) =>
+                            setPricingTiers((prev) =>
+                              prev.map((t) => (t.id === tier.id ? { ...t, features: e.target.value } : t))
+                            )
+                          }
+                          className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => setPricingTiers((prev) => prev.filter((t) => t.id !== tier.id))}
-                        className="sm:col-span-1 flex justify-center text-[#6B7280] hover:text-red-600 cursor-pointer"
+                        className="sm:col-span-1 flex justify-center text-[#6B7280] hover:text-red-600 cursor-pointer mt-4"
                         title="Remove tier"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1016,7 +982,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={customerSegment}
                     onChange={(e) => setCustomerSegment(e.target.value)}
-                    placeholder="e.g., Independent Creative Agencies, Retail Subscribers"
                     className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -1028,7 +993,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={customerProfile}
                     onChange={(e) => setCustomerProfile(e.target.value)}
-                    placeholder="e.g., Managing client deliverables on tight retainers"
                     className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -1040,7 +1004,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-[#111827]">
-                    Custom Simulation Fields (Short text, Long text, Number, Single choice, Multiple choice)
+                    Custom Simulation Fields
                   </span>
                   <button
                     type="button"
@@ -1049,10 +1013,10 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                         ...prev,
                         {
                           id: `cf-${Date.now()}`,
-                          label: 'Custom Parameter',
+                          label: '',
                           fieldType: 'short_text',
                           value: '',
-                          options: ['Option A', 'Option B'],
+                          options: [],
                         },
                       ])
                     }
@@ -1065,49 +1029,58 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
 
                 {customFields.map((cf) => (
                   <div key={cf.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white p-3 border border-[#E5E7EB] rounded-md items-center">
-                    <input
-                      type="text"
-                      value={cf.label}
-                      onChange={(e) =>
-                        setCustomFields((prev) =>
-                          prev.map((item) => (item.id === cf.id ? { ...item, label: e.target.value } : item))
-                        )
-                      }
-                      placeholder="Field Label"
-                      className="sm:col-span-4 px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
-                    />
-                    <select
-                      value={cf.fieldType}
-                      onChange={(e) =>
-                        setCustomFields((prev) =>
-                          prev.map((item) =>
-                            item.id === cf.id ? { ...item, fieldType: e.target.value as CustomFieldType } : item
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5">Field Label</label>
+                      <input
+                        type="text"
+                        value={cf.label}
+                        onChange={(e) =>
+                          setCustomFields((prev) =>
+                            prev.map((item) => (item.id === cf.id ? { ...item, label: e.target.value } : item))
                           )
-                        )
-                      }
-                      className="sm:col-span-3 px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded bg-white"
-                    >
-                      <option value="short_text">Short text</option>
-                      <option value="long_text">Long text</option>
-                      <option value="number">Number</option>
-                      <option value="single_choice">Single choice</option>
-                      <option value="multiple_choice">Multiple choice</option>
-                    </select>
-                    <input
-                      type={cf.fieldType === 'number' ? 'number' : 'text'}
-                      value={cf.value}
-                      onChange={(e) =>
-                        setCustomFields((prev) =>
-                          prev.map((item) => (item.id === cf.id ? { ...item, value: e.target.value } : item))
-                        )
-                      }
-                      placeholder="Value or options..."
-                      className="sm:col-span-4 px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
-                    />
+                        }
+                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5">Type</label>
+                      <select
+                        value={cf.fieldType}
+                        onChange={(e) =>
+                          setCustomFields((prev) =>
+                            prev.map((item) =>
+                              item.id === cf.id
+                                ? { ...item, fieldType: e.target.value as CustomFieldType, value: '' }
+                                : item
+                            )
+                          )
+                        }
+                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded bg-white"
+                      >
+                        <option value="short_text">Short text</option>
+                        <option value="long_text">Long text</option>
+                        <option value="number">Number</option>
+                        <option value="single_choice">Single choice</option>
+                        <option value="multiple_choice">Multiple choice</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5">Value</label>
+                      <input
+                        type={cf.fieldType === 'number' ? 'number' : 'text'}
+                        value={cf.value}
+                        onChange={(e) =>
+                          setCustomFields((prev) =>
+                            prev.map((item) => (item.id === cf.id ? { ...item, value: e.target.value } : item))
+                          )
+                        }
+                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => setCustomFields((prev) => prev.filter((item) => item.id !== cf.id))}
-                      className="sm:col-span-1 flex justify-center text-[#6B7280] hover:text-red-600 cursor-pointer"
+                      className="sm:col-span-1 flex justify-center text-[#6B7280] hover:text-red-600 cursor-pointer mt-4"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1116,10 +1089,11 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               </div>
             )}
 
+            {/* Hypothesis, Objectives, Process, Comparisons, Results — All Manual & Blank */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#111827] mb-1">
-                  Main Hypothesis
+                  Hypothesis
                 </label>
                 <textarea
                   rows={2}
@@ -1128,14 +1102,47 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#111827] mb-1">
-                  Research Objectives
-                </label>
+              <div className="flex flex-col justify-end">
                 <textarea
                   rows={2}
                   value={researchObjectives}
                   onChange={(e) => setResearchObjectives(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1">
+                  Process
+                </label>
+                <textarea
+                  rows={2}
+                  value={processNotes}
+                  onChange={(e) => setProcessNotes(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1">
+                  Comparisons
+                </label>
+                <textarea
+                  rows={2}
+                  value={comparisonNotes}
+                  onChange={(e) => setComparisonNotes(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#111827] mb-1">
+                  Results Criteria
+                </label>
+                <textarea
+                  rows={2}
+                  value={resultsNotes}
+                  onChange={(e) => setResultsNotes(e.target.value)}
                   className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
@@ -1149,7 +1156,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                 type="text"
                 value={researchContext}
                 onChange={(e) => setResearchContext(e.target.value)}
-                placeholder="Market conditions, competitive environment, channel context, or launch timeline..."
                 className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
               />
             </div>
@@ -1203,7 +1209,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com"
                   className="mt-3 w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
@@ -1225,7 +1230,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             </h3>
             {materials.length === 0 ? (
               <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs text-[#6B7280]">
-                No research files or URLs attached yet. You can attach materials above or proceed directly to the question battery.
+                No research files or URLs attached yet.
               </div>
             ) : (
               <div className="space-y-2">
@@ -1267,7 +1272,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             <div>
               <h2 className="text-base font-bold text-[#111827]">Step 3 — Question Battery</h2>
               <p className="text-xs text-[#6B7280]">
-                Configure the questions every selected or custom-defined audience persona will answer during the simulation.
+                Manually enter the questions your selected audience personas will answer during the simulation.
               </p>
             </div>
             <button
@@ -1324,13 +1329,17 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   </div>
                 </div>
 
-                <input
-                  type="text"
-                  value={q.text}
-                  onChange={(e) => handleUpdateQuestion(q.id, { text: e.target.value })}
-                  placeholder="Enter your research question..."
-                  className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
-                />
+                <div>
+                  <label className="block text-[11px] font-medium text-[#6B7280] mb-1">
+                    Question Text
+                  </label>
+                  <input
+                    type="text"
+                    value={q.text}
+                    onChange={(e) => handleUpdateQuestion(q.id, { text: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  />
+                </div>
 
                 {q.type !== 'free_response' && (
                   <div>
@@ -1339,16 +1348,17 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={q.options.join(', ')}
-                      onChange={(e) =>
+                      value={questionOptionsText[q.id] ?? q.options.join(', ')}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        setQuestionOptionsText((prev) => ({ ...prev, [q.id]: raw }));
                         handleUpdateQuestion(q.id, {
-                          options: e.target.value
+                          options: raw
                             .split(',')
                             .map((s) => s.trim())
                             .filter(Boolean),
-                        })
-                      }
-                      placeholder="Option 1, Option 2, Option 3"
+                        });
+                      }}
                       className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
@@ -1369,7 +1379,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   Step 4 — Configure Target Audiences &amp; AI Agents
                 </h2>
                 <p className="text-xs text-[#6B7280]">
-                  Create your own custom target audience personas or select from your workspace database, and set the AI agent count per group.
+                  Select target audience personas or create a custom audience, and manually enter the AI agent count per group.
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -1409,16 +1419,19 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                           <span className="text-[11px] font-mono text-[#6B7280]">Custom Target Audience</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min={1}
-                            max={50}
-                            value={sp.agentCount}
-                            onChange={(e) =>
-                              updateAgentCount(sp.personaId, parseInt(e.target.value, 10) || 1)
-                            }
-                            className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded"
-                          />
+                          <div>
+                            <label className="block text-[10px] font-mono text-[#6B7280] mb-0.5 text-right">
+                              AI Agents
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={50}
+                              value={agentCountInputs[sp.personaId] ?? ''}
+                              onChange={(e) => handleAgentCountInputChange(sp.personaId, e.target.value)}
+                              className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded"
+                            />
+                          </div>
                           <button
                             type="button"
                             onClick={() =>
@@ -1500,10 +1513,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                               type="number"
                               min={1}
                               max={50}
-                              value={selectedConfig.agentCount}
-                              onChange={(e) =>
-                                updateAgentCount(persona.id, parseInt(e.target.value, 10) || 1)
-                              }
+                              value={agentCountInputs[persona.id] ?? ''}
+                              onChange={(e) => handleAgentCountInputChange(persona.id, e.target.value)}
                               className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded tabular-nums"
                             />
                           </div>
@@ -1547,7 +1558,11 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   {targetAudience.trim() || selectedPersonas.map((p) => p.personaName).join(', ')}
                 </strong>
               </p>
-              <p><span className="text-[#6B7280]">Hypothesis:</span> {hypothesis}</p>
+              {hypothesis && <p><span className="text-[#6B7280]">Hypothesis:</span> {hypothesis}</p>}
+              {researchObjectives && <p className="text-[#111827]">{researchObjectives}</p>}
+              {processNotes && <p><span className="text-[#6B7280]">Process:</span> {processNotes}</p>}
+              {comparisonNotes && <p><span className="text-[#6B7280]">Comparisons:</span> {comparisonNotes}</p>}
+              {resultsNotes && <p><span className="text-[#6B7280]">Results Criteria:</span> {resultsNotes}</p>}
               <p><span className="text-[#6B7280]">Description:</span> {description}</p>
             </div>
 
@@ -1560,7 +1575,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               <ul className="space-y-1 pl-3 text-[#111827]">
                 {selectedPersonas.map((sp) => (
                   <li key={sp.personaId} className="font-mono text-[11px]">
-                    • {sp.personaName} — {sp.agentCount} agents
+                    • {sp.personaName} — {agentCountInputs[sp.personaId] || sp.agentCount} agents
                   </li>
                 ))}
               </ul>
@@ -1646,7 +1661,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     required
                     value={customPersonaName}
                     onChange={(e) => setCustomPersonaName(e.target.value)}
-                    placeholder="e.g., Urban Fitness Enthusiasts"
                     className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -1658,7 +1672,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={customPersonaSegment}
                     onChange={(e) => setCustomPersonaSegment(e.target.value)}
-                    placeholder="e.g., Consumer Health & Mobile Apps"
                     className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                   />
                 </div>
@@ -1672,7 +1685,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={customPersonaTagline}
                   onChange={(e) => setCustomPersonaTagline(e.target.value)}
-                  placeholder="Describe how this audience evaluates products, what motivates them, and what objections they raise..."
                   className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                 />
               </div>
@@ -1685,7 +1697,6 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="text"
                   value={customPersonaContext}
                   onChange={(e) => setCustomPersonaContext(e.target.value)}
-                  placeholder="e.g., Discovering products via social feeds and comparing subscription tiers"
                   className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
                 />
               </div>
@@ -1724,7 +1735,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     min={0}
                     max={100}
                     value={customBrandLoyalty}
-                    onChange={(e) => setCustomBrandLoyalty(Number(e.target.value))}
+                    onChange={(e) => setCustomBrandLoyalty(e.target.value)}
                     className="w-full px-2 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
                   />
                 </div>
@@ -1735,7 +1746,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     min={1}
                     max={50}
                     value={customAgentCount}
-                    onChange={(e) => setCustomAgentCount(Number(e.target.value))}
+                    onChange={(e) => setCustomAgentCount(e.target.value)}
                     className="w-full px-2 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
                   />
                 </div>

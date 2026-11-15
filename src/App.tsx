@@ -7,14 +7,12 @@ import {
   Compass,
   DollarSign,
   Edit3,
-  FileText,
   FlaskConical,
   FolderKanban,
   LayoutDashboard,
   Layers,
   Plus,
   Search,
-  ShieldCheck,
   Sliders,
   Square,
   Trash2,
@@ -48,6 +46,17 @@ import {
   INITIAL_SAMPLE_SIMULATIONS,
   SIMULATION_TYPES_META,
 } from './data/seedData.ts';
+import { supabase } from './supabaseClient.js';
+import {
+  clearRecentSearchesInSupabase,
+  createWorkspaceInSupabase,
+  deleteRecentSearchInSupabase,
+  deleteSimulationInSupabase,
+  loadUserWorkspaceFromSupabase,
+  logRecentSearchToSupabase,
+  renameWorkspaceInSupabase,
+  signOutFromSupabase,
+} from './services/supabaseService.js';
 
 type AppView = 'landing' | 'auth' | 'workspace';
 type WorkspaceTab = 'dashboard' | 'simulations' | 'agent' | 'audience' | 'account' | 'owner';
@@ -57,11 +66,11 @@ export default function App() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authToken, setAuthToken] = useState<string>('');
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
 
   // Navigation & Layout State
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [showRightQuickPanel, setShowRightQuickPanel] = useState(true);
   const [accountInitialSubTab, setAccountInitialSubTab] = useState<
     'profile' | 'reports' | 'activity' | 'owner'
   >('profile');
@@ -105,11 +114,37 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Load workspace data when authenticated or switching workspace
+  // Load workspace data from Supabase first, then sync with backend API
   const fetchWorkspaceState = useCallback(
     async (token: string, wsId?: string) => {
       if (!token) return;
       try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          const supaData = await loadUserWorkspaceFromSupabase(session.user, wsId);
+          if (supaData) {
+            setUser(supaData.user);
+            setWorkspaces(supaData.workspaces);
+            setActiveWorkspaceId(supaData.activeWorkspaceId);
+            if (supaData.simulations.length > 0) {
+              setSimulations(supaData.simulations);
+            }
+            setPersonas(supaData.personas);
+            if (supaData.conversations.length > 0) {
+              setConversations(supaData.conversations);
+            }
+            if (supaData.reports.length > 0) {
+              setReports(supaData.reports);
+            }
+            if (supaData.recentSearches.length > 0) {
+              setRecentSearches(supaData.recentSearches);
+            }
+          }
+        }
+
         const query = wsId ? `?workspaceId=${encodeURIComponent(wsId)}` : '';
         const res = await fetch(`/api/workspace/bootstrap${query}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -135,21 +170,127 @@ export default function App() {
     []
   );
 
+  // Supabase Session Protection & Auth State Listener
+  useEffect(() => {
+    let mounted = true;
+
+    const verifyInitialSession = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        const path = window.location.pathname;
+        const isProtectedPath =
+          path === '/dashboard' ||
+          path === '/simulations' ||
+          path === '/agent' ||
+          path === '/audience' ||
+          path === '/account';
+
+        if (session && session.user) {
+          // Sync session with backend API
+          const syncRes = await fetch('/api/auth/supabase-session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              userId: session.user.id,
+              email: session.user.email || '',
+              name:
+                session.user.user_metadata?.full_name ||
+                session.user.email?.split('@')[0] ||
+                'Clamir User',
+            }),
+          }).catch(() => null);
+
+          if (syncRes && syncRes.ok) {
+            const synced = await syncRes.json();
+            setAuthToken(session.access_token);
+            setUser(synced.user);
+            setWorkspaces(synced.workspaces);
+            if (synced.workspaces?.[0]) {
+              setActiveWorkspaceId(synced.workspaces[0].id);
+            }
+          } else {
+            setAuthToken(session.access_token);
+            setUser({
+              id: session.user.id,
+              name:
+                session.user.user_metadata?.full_name ||
+                session.user.email?.split('@')[0] ||
+                'Clamir User',
+              email: session.user.email || '',
+              plan: 'Explorer',
+              isOwner:
+                (session.user.email || '').toLowerCase() === 'thexplorervaruns@gmail.com',
+              createdAt: session.user.created_at || new Date().toISOString(),
+            });
+          }
+          setAppView('workspace');
+          if (path === '/login' || path === '/signup') {
+            window.history.replaceState({}, '', '/');
+          }
+        } else if (path === '/login' || path === '/signup' || isProtectedPath) {
+          setAuthMode(path === '/signup' ? 'signup' : 'login');
+          setAppView('auth');
+          if (isProtectedPath) {
+            window.history.replaceState({}, '', '/login');
+          }
+        }
+      } finally {
+        if (mounted) {
+          setAuthChecking(false);
+        }
+      }
+    };
+
+    verifyInitialSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if (event === 'SIGNED_OUT') {
+        setAuthToken('');
+        setUser(null);
+        setAppView((prev) => (prev === 'workspace' ? 'auth' : prev));
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        setAuthToken(session.access_token);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
   useEffect(() => {
     if (authToken && appView === 'workspace') {
       fetchWorkspaceState(authToken, activeWorkspaceId);
     }
   }, [authToken, activeWorkspaceId, appView, fetchWorkspaceState]);
 
-  const handleGetStartedFromLanding = (intent?: 'simulations' | 'agent' | 'signup') => {
-    if (authToken && user) {
+  const handleGetStartedFromLanding = async (intent?: 'simulations' | 'agent' | 'signup') => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if ((session && session.user && user) || (authToken && user)) {
       if (intent === 'agent') setActiveTab('agent');
       else if (intent === 'simulations') setActiveTab('simulations');
       else setActiveTab('dashboard');
       setAppView('workspace');
       return;
     }
-    setAuthMode(intent === 'signup' ? 'signup' : 'login');
+    const targetMode = intent === 'signup' ? 'signup' : 'login';
+    setAuthMode(targetMode);
+    window.history.pushState({}, '', targetMode === 'signup' ? '/signup' : '/login');
     setAppView('auth');
   };
 
@@ -164,19 +305,26 @@ export default function App() {
     if (payload.workspaces[0]) {
       setActiveWorkspaceId(payload.workspaces[0].id);
     }
+    window.history.replaceState({}, '', '/');
     setAppView('workspace');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await signOutFromSupabase().catch(() => {});
     setAuthToken('');
     setUser(null);
-    setAppView('landing');
+    window.history.replaceState({}, '', '/login');
+    setAuthMode('login');
+    setAppView('auth');
   };
 
   // Workspace CRUD handlers
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWorkspaceName.trim()) return;
+    if (user) {
+      await createWorkspaceInSupabase(user.id, newWorkspaceName.trim()).catch(() => null);
+    }
     const res = await fetch('/api/workspaces', {
       method: 'POST',
       headers: {
@@ -197,6 +345,9 @@ export default function App() {
 
   const handleRenameWorkspace = async (wsId: string) => {
     if (!renameWorkspaceValue.trim()) return;
+    if (user) {
+      await renameWorkspaceInSupabase(user.id, wsId, renameWorkspaceValue.trim()).catch(() => null);
+    }
     const res = await fetch(`/api/workspaces/${wsId}`, {
       method: 'PUT',
       headers: {
@@ -229,6 +380,13 @@ export default function App() {
     // Log recent search/activity
     const sim = simulations.find((s) => s.id === simId);
     if (sim && authToken) {
+      if (user) {
+        await logRecentSearchToSupabase(user.id, activeWorkspaceId, {
+          query: sim.name,
+          category: 'Simulation',
+          targetId: sim.id,
+        }).catch(() => null);
+      }
       await fetch('/api/recent-searches', {
         method: 'POST',
         headers: {
@@ -256,6 +414,9 @@ export default function App() {
   };
 
   const handleDeleteSimulation = async (simId: string) => {
+    if (user) {
+      await deleteSimulationInSupabase(user.id, simId).catch(() => false);
+    }
     const res = await fetch(`/api/simulations/${simId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
@@ -268,6 +429,9 @@ export default function App() {
   };
 
   const handleDeleteRecentSearch = async (id: string) => {
+    if (user) {
+      await deleteRecentSearchInSupabase(user.id, id).catch(() => false);
+    }
     await fetch(`/api/recent-searches/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
@@ -276,12 +440,27 @@ export default function App() {
   };
 
   const handleClearRecentSearches = async () => {
+    if (user) {
+      await clearRecentSearchesInSupabase(user.id, activeWorkspaceId).catch(() => false);
+    }
     await fetch('/api/recent-searches', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
     });
     fetchWorkspaceState(authToken, activeWorkspaceId);
   };
+
+  // Prevent protected content from briefly appearing before authentication is checked
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-white text-[#111827] flex items-center justify-center p-6">
+        <div className="flex flex-col items-center gap-3">
+          <ClamirLogo size="md" />
+          <span className="text-xs font-mono text-[#6B7280]">Verifying session...</span>
+        </div>
+      </div>
+    );
+  }
 
   // Render Landing or Auth Views
   if (appView === 'landing') {
@@ -303,29 +482,38 @@ export default function App() {
         <AuthEntryFlow
           initialMode={authMode}
           onSuccess={handleAuthSuccess}
-          onBackToLanding={() => setAppView('landing')}
+          onBackToLanding={() => {
+            window.history.replaceState({}, '', '/');
+            setAppView('landing');
+          }}
         />
       </>
     );
   }
 
-  const activeWorkspace =
+  const rawActiveWorkspace =
     workspaces.find((w) => w.id === activeWorkspaceId) || {
       id: 'ws-default',
-      name: 'Clamir Research Lab',
+      name: 'Clamir Workspace',
       ownerId: user.id,
       createdAt: new Date().toISOString(),
-      role: 'Owner',
+      role: 'Owner' as const,
     };
 
+  const activeWorkspace: Workspace = {
+    ...rawActiveWorkspace,
+    name:
+      rawActiveWorkspace.name === 'Clamir Research Lab' ||
+      rawActiveWorkspace.name === "Varun's Workspace" ||
+      rawActiveWorkspace.name === 'VUser Workspace' ||
+      rawActiveWorkspace.name === "VUser's Workspace"
+        ? 'Clamir Workspace'
+        : rawActiveWorkspace.name,
+  };
+
   const activeSimObj = simulations.find((s) => s.id === selectedSimId) || null;
-  const activeContextSim =
-    simulations.find((s) => s.id === (selectedSimId || agentFocusSimId)) ||
-    simulations[0] ||
-    null;
 
   const completedSimsCount = simulations.filter((s) => s.status === 'Completed').length;
-  const activeSimsCount = simulations.filter((s) => s.status === 'Active').length;
   const filteredSimulations = simulations.filter((s) => {
     if (!simSearchQuery.trim()) return true;
     const q = simSearchQuery.toLowerCase();
@@ -579,13 +767,13 @@ export default function App() {
 
             {/* TAB 1: DASHBOARD */}
             {activeTab === 'dashboard' && (
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-                <div className={`${showRightQuickPanel ? 'xl:col-span-9' : 'xl:col-span-12'} space-y-6`}>
-                  {/* Welcome Header & Main Actions */}
+              <div className="space-y-6">
+                <div className="space-y-6">
+                  {/* Welcome Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5E7EB]">
                     <div>
                       <span className="text-xs font-mono text-[#6B7280]">
-                        CLAMIR AI WORKSPACE · {activeWorkspace.name.toUpperCase()} · {user.plan.toUpperCase()} PLAN
+                        CLAMIR WORKSPACE
                       </span>
                       <h1 className="text-2xl font-bold text-[#111827] mt-0.5">
                         Welcome back, {displayUserName.split(' ')[0]}
@@ -593,34 +781,6 @@ export default function App() {
                       <p className="text-xs sm:text-sm text-[#6B7280]">
                         Simulate custom target audiences, interrogate context with AI agents, and export full research reports.
                       </p>
-                    </div>
-
-                    {/* Prominent Main Actions */}
-                    <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleStartNewSimShortcut('test_idea')}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>New Simulation</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('agent')}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-[#F9FAFB] cursor-pointer"
-                      >
-                        <Bot className="w-3.5 h-3.5" />
-                        <span>Context &amp; AI Agent</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('audience')}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-[#F9FAFB] cursor-pointer"
-                      >
-                        <Users className="w-3.5 h-3.5" />
-                        <span>Define Custom Audience</span>
-                      </button>
                     </div>
                   </div>
 
@@ -630,7 +790,7 @@ export default function App() {
                       { label: 'Total Simulations', value: simulations.length },
                       { label: 'Completed Simulations', value: completedSimsCount },
                       { label: 'Active Audiences', value: personas.length },
-                      { label: 'Saved Reports (Explorer+)', value: reports.length },
+                      { label: 'Saved Reports', value: reports.length },
                     ].map((kpi) => (
                       <div
                         key={kpi.label}
@@ -818,67 +978,6 @@ export default function App() {
                     )}
                   </div>
                 </div>
-
-                {/* Right Contextual Panel on Dashboard */}
-                {showRightQuickPanel && (
-                  <div className="xl:col-span-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg p-5 space-y-5">
-                    <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2.5">
-                      <h3 className="text-xs font-bold text-[#111827] tracking-wide">
-                        CONTEXT &amp; AUDIENCE BRIEFING
-                      </h3>
-                      <button
-                        type="button"
-                        onClick={() => setShowRightQuickPanel(false)}
-                        className="text-xs text-[#6B7280] hover:text-[#111827] cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="space-y-3 text-xs">
-                      <p className="text-[#6B7280] leading-relaxed">
-                        All persona reactions and scores are generated via the Clamir AI Engine and labeled as simulated intelligence.
-                      </p>
-
-                      <div className="p-3 bg-white border border-[#E5E7EB] rounded-md space-y-1.5">
-                        <span className="font-semibold text-[#111827] block">
-                          Active Audience Database ({personas.length})
-                        </span>
-                        {personas.length === 0 ? (
-                          <p className="text-[11px] text-[#6B7280]">
-                            Built-in personas deleted. Create custom target audiences anytime.
-                          </p>
-                        ) : (
-                          personas.slice(0, 4).map((p) => (
-                            <div key={p.id} className="flex items-center justify-between text-[11px]">
-                              <span className="text-[#111827] truncate">{p.name}</span>
-                              <span className="font-mono text-[#6B7280] tabular-nums">
-                                {p.isBuiltIn ? 'Built-in' : 'Custom'}
-                              </span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      <div className="p-3 bg-white border border-[#E5E7EB] rounded-md space-y-1">
-                        <span className="font-semibold text-[#111827] block">
-                          Explorer Plan Access
-                        </span>
-                        <p className="text-[11px] text-[#6B7280]">
-                          Both <strong>Accounts</strong> and <strong>Reports</strong> (PDF, JSON, CSV, TXT exports) are unlocked under the Explorer plan.
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('audience')}
-                        className="w-full py-2 px-3 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-gray-100 cursor-pointer"
-                      >
-                        Manage Audience Database
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -945,7 +1044,6 @@ export default function App() {
                           type="text"
                           value={simSearchQuery}
                           onChange={(e) => setSimSearchQuery(e.target.value)}
-                          placeholder="Search simulations by name or type..."
                           className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                         />
                       </div>
@@ -1186,7 +1284,7 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setRenamingWorkspaceId(ws.id);
-                            setRenameWorkspaceValue(ws.name);
+                            setRenameWorkspaceValue('');
                           }}
                           className="p-1.5 text-[#6B7280] hover:text-[#111827] cursor-pointer"
                           title="Rename workspace"
@@ -1209,7 +1307,6 @@ export default function App() {
                   type="text"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  placeholder="e.g., Q1 Consumer Launch Lab"
                   className="flex-1 px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md"
                 />
                 <button

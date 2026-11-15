@@ -23,11 +23,11 @@ interface SimulationResultsViewProps {
 }
 
 const ORDERED_STAGES: SimulationStage[] = [
-  'Queued',
-  'Preparing',
-  'Processing Responses',
-  'Analyzing',
-  'Generating Insights',
+  'Preparing simulation',
+  'Searching the web',
+  'Analyzing sources',
+  'Verifying information',
+  'Generating results',
   'Completed',
 ];
 
@@ -150,6 +150,9 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
             )}
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#111827] mt-1">{simulation.name}</h1>
+          {simulation.researchObjectives && (
+            <p className="text-xs sm:text-sm text-[#6B7280] mt-1">{simulation.researchObjectives}</p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -297,7 +300,11 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                 <h2 className="text-base font-bold text-[#111827]">Executive Summary</h2>
                 <span className="text-xs font-mono text-[#6B7280]">
-                  Engine: {res.aiEngineMode === 'gemini-live' ? 'Clamir Gemini Engine' : 'Clamir Calibrated Simulation Engine'}
+                  Engine:{' '}
+                  {res.aiEngineMode === 'openrouter-gemini-2.5-flash' ||
+                  res.aiEngineMode === 'openrouter-live'
+                    ? 'OpenRouter (google/gemini-2.5-flash) · Live Web Research'
+                    : 'Clamir Evidence Simulation Engine'}
                 </span>
               </div>
 
@@ -717,6 +724,190 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
               ))}
             </div>
           </div>
+
+          {/* EVIDENCE-BASED RESEARCH, METHODOLOGY, CALCULATIONS & SOURCES */}
+          {res.structuredSimulationReport && (
+            <div className="bg-white border border-[#E5E7EB] rounded-lg p-6 space-y-6">
+              <div className="border-b border-[#E5E7EB] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span className="text-xs font-mono text-[#6B7280]">
+                    REAL-TIME WEB RESEARCH &amp; METHODOLOGY DOSSIER
+                  </span>
+                  <h2 className="text-base font-bold text-[#111827]">
+                    Evidence, Methodology, Calculations &amp; Verified Sources
+                  </h2>
+                </div>
+                <span className="text-xs font-mono text-[#6B7280]">
+                  Sources Cited: {res.structuredSimulationReport.sourcesAndReferences?.length || 0}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {res.structuredSimulationReport.simulationOverview && (
+                  <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1">
+                    <span className="font-bold text-[#111827] block">Simulation Overview</span>
+                    <p className="text-[#6B7280] leading-relaxed">
+                      {res.structuredSimulationReport.simulationOverview}
+                    </p>
+                  </div>
+                )}
+                {res.structuredSimulationReport.scenarioAndParameters && (
+                  <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1">
+                    <span className="font-bold text-[#111827] block">User&apos;s Scenario &amp; Parameters</span>
+                    <p className="text-[#6B7280] leading-relaxed">
+                      {res.structuredSimulationReport.scenarioAndParameters}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {res.structuredSimulationReport.researchFindings && (
+                <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs space-y-1.5">
+                  <span className="font-bold text-[#111827] block">Real-Time Web Research Findings</span>
+                  <p className="text-[#6B7280] leading-relaxed">
+                    {res.structuredSimulationReport.researchFindings}
+                  </p>
+                </div>
+              )}
+
+              {res.structuredSimulationReport.importantFactsAndEvidence &&
+                res.structuredSimulationReport.importantFactsAndEvidence.length > 0 && (
+                  <div className="space-y-2.5">
+                    <h3 className="text-xs font-bold text-[#111827]">
+                      Important Facts &amp; Evidence Classification
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {res.structuredSimulationReport.importantFactsAndEvidence.map((item, idx) => (
+                        <div key={idx} className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1">
+                          <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
+                            <span className="font-semibold text-[#111827]">{item.classification}</span>
+                            <span className="text-[#6B7280] truncate">{item.sourceTitle}</span>
+                          </div>
+                          <p className="text-[#111827]">{item.claim}</p>
+                          {item.sourceUrl && (
+                            <a
+                              href={item.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-mono text-[#111827] underline block truncate"
+                            >
+                              {item.sourceUrl}
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {res.structuredSimulationReport.simulationMethodology && (
+                  <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1.5">
+                    <span className="font-bold text-[#111827] block">Simulation Methodology</span>
+                    <p className="text-[#6B7280] leading-relaxed">
+                      {res.structuredSimulationReport.simulationMethodology}
+                    </p>
+                  </div>
+                )}
+
+                {res.structuredSimulationReport.stepByStepResults &&
+                  res.structuredSimulationReport.stepByStepResults.length > 0 && (
+                    <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1.5">
+                      <span className="font-bold text-[#111827] block">Step-by-Step Simulation Results</span>
+                      <ol className="list-decimal list-inside space-y-1 text-[#6B7280]">
+                        {res.structuredSimulationReport.stepByStepResults.map((stepStr, idx) => (
+                          <li key={idx}>{stepStr}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+              </div>
+
+              {res.structuredSimulationReport.relevantCalculations &&
+                res.structuredSimulationReport.relevantCalculations.length > 0 && (
+                  <div className="space-y-2.5">
+                    <h3 className="text-xs font-bold text-[#111827]">
+                      Relevant Calculations &amp; Quantitative Justification
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {res.structuredSimulationReport.relevantCalculations.map((calc, idx) => (
+                        <div key={idx} className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1 font-mono">
+                          <div className="font-bold text-[#111827] font-sans">{calc.metric}</div>
+                          <div className="text-[11px] text-[#6B7280]">Formula: {calc.formula}</div>
+                          <div className="text-[11px] text-[#6B7280]">Inputs: {calc.inputs}</div>
+                          <div className="text-xs font-bold text-[#111827] pt-1">
+                            Output: {calc.output}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {res.structuredSimulationReport.expectedOutcomes && (
+                  <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1">
+                    <span className="font-bold text-[#111827] block">Expected Outcomes</span>
+                    <p className="text-[#6B7280] leading-relaxed">
+                      {res.structuredSimulationReport.expectedOutcomes}
+                    </p>
+                  </div>
+                )}
+
+                {res.structuredSimulationReport.risksAndLimitations &&
+                  res.structuredSimulationReport.risksAndLimitations.length > 0 && (
+                    <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-1">
+                      <span className="font-bold text-[#111827] block">Risks &amp; Limitations</span>
+                      <ul className="space-y-1 text-[#6B7280]">
+                        {res.structuredSimulationReport.risksAndLimitations.map((r, idx) => (
+                          <li key={idx}>• {r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+              </div>
+
+              {res.structuredSimulationReport.sourcesAndReferences &&
+                res.structuredSimulationReport.sourcesAndReferences.length > 0 && (
+                  <div className="space-y-2.5">
+                    <h3 className="text-xs font-bold text-[#111827]">
+                      Sources &amp; References (Firecrawl / Spider Live Extraction)
+                    </h3>
+                    <div className="space-y-2">
+                      {res.structuredSimulationReport.sourcesAndReferences.map((src, idx) => (
+                        <div key={idx} className="p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="font-semibold text-[#111827] block truncate">
+                              [{idx + 1}] {src.title}
+                            </span>
+                            <a
+                              href={src.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-mono text-[#6B7280] underline truncate block"
+                            >
+                              {src.url}
+                            </a>
+                          </div>
+                          <div className="text-[11px] font-mono text-[#6B7280] shrink-0">
+                            {src.provider || 'Web'} · {src.authorityTier || 'Verified Source'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {res.structuredSimulationReport.finalConclusion && (
+                <div className="p-4 bg-[#F9FAFB] border border-[#111827] rounded-md text-xs space-y-1">
+                  <span className="font-bold text-[#111827] block">Final Conclusion</span>
+                  <p className="text-[#111827] leading-relaxed">
+                    {res.structuredSimulationReport.finalConclusion}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

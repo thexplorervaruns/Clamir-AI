@@ -28,16 +28,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
   const [showBriefModal, setShowBriefModal] = useState(false);
   const [infoModal, setInfoModal] = useState<null | 'docs' | 'privacy' | 'terms' | 'contact'>(null);
 
-  // Interactive Demo state (supports both calibrated personas AND custom-defined audiences)
-  const [demoQuestion, setDemoQuestion] = useState(
-    'Would you pay $29/month for an automated meeting brief tool that summarizes customer calls into CRM action items?'
-  );
+  // Interactive Demo state — All text fields start empty, no automatic content
+  const [demoQuestion, setDemoQuestion] = useState('');
   const [demoAudienceMode, setDemoAudienceMode] = useState<'preset' | 'custom'>('preset');
   const [demoPersonaId, setDemoPersonaId] = useState('persona-value-optimizers');
-  const [customAudienceName, setCustomAudienceName] = useState('Independent Healthcare Clinic Directors');
-  const [customAudienceDescription, setCustomAudienceDescription] = useState(
-    'Time-sensitive medical practice operators focused on patient privacy, HIPAA compliance, and reducing front-desk administrative load.'
-  );
+  const [customAudienceName, setCustomAudienceName] = useState('');
+  const [customAudienceDescription, setCustomAudienceDescription] = useState('');
   const [customPriceSensitivity, setCustomPriceSensitivity] = useState<PriceSensitivity>('Moderate');
   const [customDecisionSpeed, setCustomDecisionSpeed] = useState<DecisionSpeed>('Deliberate');
 
@@ -50,16 +46,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
     keyObjection: string;
     opportunity: string;
     engineMode: string;
-  } | null>({
-    personaName: 'Value Optimizers',
-    reaction: 'Conditional Positive',
-    acceptanceScore: 74,
-    response:
-      'At $29/month, the ROI works if it saves at least 2 hours of manual CRM data entry per week. However, I would compare it against built-in transcription features already bundled in our video conferencing suite before approving another recurring subscription.',
-    keyObjection: 'Overlap with existing bundled transcription tools unless CRM field mapping is 100% automated.',
-    opportunity: 'Offer a 14-day trial showing exact hours saved and native two-way CRM sync on the starter plan.',
-    engineMode: 'Sample AI-Generated Output',
-  });
+  } | null>(null);
 
   const sampleSim = INITIAL_SAMPLE_SIMULATIONS[0];
   const activePreviewBreakdown =
@@ -691,7 +678,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                   type="text"
                   value={demoQuestion}
                   onChange={(e) => setDemoQuestion(e.target.value)}
-                  placeholder="e.g., Would you switch to an automated inventory forecasting platform for $79/month?"
                   className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
                 />
               </div>
@@ -724,7 +710,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                         type="text"
                         value={customAudienceName}
                         onChange={(e) => setCustomAudienceName(e.target.value)}
-                        placeholder="e.g., E-Commerce Logistics Managers"
                         className="w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md"
                       />
                     </div>
@@ -767,31 +752,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                       type="text"
                       value={customAudienceDescription}
                       onChange={(e) => setCustomAudienceDescription(e.target.value)}
-                      placeholder="Describe who this audience is, what they care about, and what makes them skeptical..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-[#6B7280]">
-                  <span>Sample prompts:</span>
-                  {[
-                    'Would you pay $49/mo for an AI legal contract reviewer?',
-                    'Do you prefer annual flat-rate billing or usage-based credits?',
-                  ].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setDemoQuestion(preset)}
-                      className="underline hover:text-[#111827] cursor-pointer text-left"
-                    >
-                      &ldquo;{preset.slice(0, 38)}...&rdquo;
-                    </button>
-                  ))}
-                </div>
-
+              <div className="flex items-center justify-end pt-1">
                 <button
                   type="submit"
                   disabled={demoLoading}

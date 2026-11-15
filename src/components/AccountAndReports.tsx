@@ -19,6 +19,10 @@ import {
   Workspace,
 } from '../types/clamir.ts';
 import { exportSimulationReport } from '../utils/reportExporter.ts';
+import {
+  deleteReportInSupabase,
+  updateProfileInSupabase,
+} from '../services/supabaseService.js';
 
 interface AccountAndReportsProps {
   user: UserProfile;
@@ -54,8 +58,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
   const [subTab, setSubTab] = useState<'profile' | 'reports' | 'activity' | 'owner'>(
     initialSubTab
   );
-  const [profileName, setProfileName] = useState(user.name);
-  const [profileEmail, setProfileEmail] = useState(user.email);
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -64,8 +68,18 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
   const [formatFilter, setFormatFilter] = useState<'ALL' | 'PDF' | 'JSON' | 'TXT' | 'CSV'>('ALL');
   const [confirmDeleteReportId, setConfirmDeleteReportId] = useState<string | null>(null);
 
-  // Owner Settings state
-  const [editableConfig, setEditableConfig] = useState<PlatformConfig>(platformConfig);
+  // Owner Settings state — All text & numerical fields start empty and stay empty when cleared
+  const [ownerPlanInputs, setOwnerPlanInputs] = useState<
+    { id: string; name: string; priceLabel: string; billingPeriod: string; simulationsLimit: string }[]
+  >(() =>
+    platformConfig.pricingPlans.map((plan) => ({
+      id: plan.id,
+      name: plan.name,
+      priceLabel: '',
+      billingPeriod: '',
+      simulationsLimit: '',
+    }))
+  );
   const [ownerMsg, setOwnerMsg] = useState<string | null>(null);
   const [savingOwner, setSavingOwner] = useState(false);
 
@@ -75,6 +89,10 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
     setSavingProfile(true);
     setProfileMsg(null);
     try {
+      await updateProfileInSupabase(user.id, {
+        name: profileName.trim(),
+        email: profileEmail.trim() || user.email,
+      }).catch(() => null);
       const res = await fetch('/api/account/profile', {
         method: 'PUT',
         headers: {
@@ -100,6 +118,7 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
 
   const handlePlanChange = async (newPlan: 'Explorer' | 'Growth' | 'Enterprise') => {
     setProfileMsg(null);
+    await updateProfileInSupabase(user.id, { plan: newPlan }).catch(() => null);
     const res = await fetch('/api/account/plan', {
       method: 'PUT',
       headers: {
@@ -126,6 +145,7 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
   };
 
   const handleDeleteReport = async (id: string) => {
+    await deleteReportInSupabase(user.id, id).catch(() => false);
     const res = await fetch(`/api/reports/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
@@ -141,13 +161,29 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
     setSavingOwner(true);
     setOwnerMsg(null);
     try {
+      const updatedPlans = platformConfig.pricingPlans.map((plan, idx) => {
+        const input = ownerPlanInputs[idx];
+        return {
+          ...plan,
+          priceLabel: input?.priceLabel.trim() ? input.priceLabel.trim() : plan.priceLabel,
+          billingPeriod: input?.billingPeriod.trim() ? input.billingPeriod.trim() : plan.billingPeriod,
+          simulationsLimit:
+            input?.simulationsLimit.trim() !== '' && !Number.isNaN(Number(input?.simulationsLimit))
+              ? Number(input.simulationsLimit)
+              : plan.simulationsLimit,
+        };
+      });
+      const nextConfig: PlatformConfig = {
+        ...platformConfig,
+        pricingPlans: updatedPlans,
+      };
       const res = await fetch('/api/owner/config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify(editableConfig),
+        body: JSON.stringify(nextConfig),
       });
       const data = await res.json();
       if (res.ok) {
@@ -390,7 +426,6 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 type="text"
                 value={reportSearch}
                 onChange={(e) => setReportSearch(e.target.value)}
-                placeholder="Search saved reports by title or simulation..."
                 className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
               />
             </div>
@@ -576,18 +611,19 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
 
           <form onSubmit={handleSaveOwnerConfig} className="space-y-6 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {editableConfig.pricingPlans.map((plan, idx) => (
-                <div key={plan.id} className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-3">
-                  <div className="font-bold text-sm text-[#111827]">{plan.name} Tier Config</div>
+              {ownerPlanInputs.map((planInput, idx) => (
+                <div key={planInput.id} className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md space-y-3">
+                  <div className="font-bold text-sm text-[#111827]">{planInput.name} Tier Config</div>
                   <div>
                     <label className="block font-semibold text-[#111827] mb-1">Price Label</label>
                     <input
                       type="text"
-                      value={plan.priceLabel}
+                      value={planInput.priceLabel}
                       onChange={(e) => {
-                        const next = [...editableConfig.pricingPlans];
-                        next[idx] = { ...next[idx], priceLabel: e.target.value };
-                        setEditableConfig({ ...editableConfig, pricingPlans: next });
+                        const val = e.target.value;
+                        setOwnerPlanInputs((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, priceLabel: val } : item))
+                        );
                       }}
                       className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
                     />
@@ -596,11 +632,12 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                     <label className="block font-semibold text-[#111827] mb-1">Billing Period</label>
                     <input
                       type="text"
-                      value={plan.billingPeriod}
+                      value={planInput.billingPeriod}
                       onChange={(e) => {
-                        const next = [...editableConfig.pricingPlans];
-                        next[idx] = { ...next[idx], billingPeriod: e.target.value };
-                        setEditableConfig({ ...editableConfig, pricingPlans: next });
+                        const val = e.target.value;
+                        setOwnerPlanInputs((prev) =>
+                          prev.map((item, i) => (i === idx ? { ...item, billingPeriod: val } : item))
+                        );
                       }}
                       className="w-full px-2.5 py-1.5 bg-white border border-[#E5E7EB] rounded"
                     />
@@ -609,11 +646,14 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                     <label className="block font-semibold text-[#111827] mb-1">Monthly Simulation Limit</label>
                     <input
                       type="number"
-                      value={plan.simulationsLimit}
+                      value={planInput.simulationsLimit}
                       onChange={(e) => {
-                        const next = [...editableConfig.pricingPlans];
-                        next[idx] = { ...next[idx], simulationsLimit: Number(e.target.value) };
-                        setEditableConfig({ ...editableConfig, pricingPlans: next });
+                        const val = e.target.value;
+                        setOwnerPlanInputs((prev) =>
+                          prev.map((item, i) =>
+                            i === idx ? { ...item, simulationsLimit: val } : item
+                          )
+                        );
                       }}
                       className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
                     />

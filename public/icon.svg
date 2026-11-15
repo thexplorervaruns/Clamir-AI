@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- Background transparent for vector versatility -->
+  <!-- Comet 1: Primary upper-left to lower-left head, trail sweeping up-right -->
+  <path d="M36 74 L98 18 L50 86 Z" fill="#000000" />
+  <circle cx="38" cy="82" r="12" fill="#000000" />
+  <!-- Comet 2: Center-right head with sharp diagonal trail -->
+  <path d="M62 88 L108 44 L72 96 Z" fill="#000000" />
+  <circle cx="64" cy="94" r="9.5" fill="#000000" />
+  <!-- Comet 3: Upper head with sharp diagonal trail -->
+  <path d="M22 46 L72 10 L32 54 Z" fill="#000000" />
+  <circle cx="24" cy="52" r="8.5" fill="#000000" />
+  <!-- Small 4-point stars -->
+  <path d="M52 24 L54.2 29.8 L60 32 L54.2 34.2 L52 40 L49.8 34.2 L44 32 L49.8 29.8 Z" fill="#000000" />
+  <path d="M88 68 L89.6 72.4 L94 74 L89.6 75.6 L88 80 L86.4 75.6 L82 74 L86.4 72.4 Z" fill="#000000" />
+  <path d="M20 20 L21.2 23.8 L25 25 L21.2 26.2 L20 30 L18.8 26.2 L15 25 L18.8 23.8 Z" fill="#000000" />
+</svg>

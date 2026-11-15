@@ -1,0 +1,6 @@
+{
+  "name": "Clamir AI",
+  "description": "AI-powered Audience Simulation and Consumer Intelligence platform to test product ideas, pricing, A/B concepts, and market opportunities with simulated customer personas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

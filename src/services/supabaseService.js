@@ -128,6 +128,8 @@ function mapPersonaRow(row) {
 }
 
 function mapSimulationRow(row) {
+  const rawTypeSpecific = row.type_specific_data || {};
+  const { _forecastConfig, ...cleanTypeSpecific } = rawTypeSpecific;
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -138,10 +140,11 @@ function mapSimulationRow(row) {
     researchContext: row.research_context || "",
     targetAudience: row.target_audience || "",
     researchObjectives: row.research_objectives || "",
-    typeSpecificData: row.type_specific_data || {},
+    typeSpecificData: cleanTypeSpecific,
     materials: Array.isArray(row.materials) ? row.materials : [],
     questions: Array.isArray(row.questions) ? row.questions : [],
     selectedPersonas: Array.isArray(row.selected_personas) ? row.selected_personas : [],
+    forecastConfig: _forecastConfig || undefined,
     status: row.status || "Active",
     stage: row.stage || "Queued",
     progress: typeof row.progress === "number" ? row.progress : 0,
@@ -476,6 +479,11 @@ export async function deletePersonaInSupabase(userId, workspaceId, personaId) {
 }
 
 export async function saveSimulationToSupabase(userId, workspaceId, sim) {
+  const typeSpecificPayload = {
+    ...(sim.typeSpecificData || {}),
+    ...(sim.forecastConfig ? { _forecastConfig: sim.forecastConfig } : {}),
+  };
+
   const rowPayload = {
     user_id: userId,
     workspace_id: workspaceId,
@@ -486,7 +494,7 @@ export async function saveSimulationToSupabase(userId, workspaceId, sim) {
     research_context: sim.researchContext || "",
     target_audience: sim.targetAudience || "",
     research_objectives: sim.researchObjectives || "",
-    type_specific_data: sim.typeSpecificData || {},
+    type_specific_data: typeSpecificPayload,
     materials: sim.materials || [],
     questions: sim.questions || [],
     selected_personas: sim.selectedPersonas || [],

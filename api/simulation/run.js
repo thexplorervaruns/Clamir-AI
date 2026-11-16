@@ -636,7 +636,15 @@ Return a JSON object with these exact top-level keys:
  */
 export async function handleSimulationRunRequest(req, res) {
   try {
-    const { simulation, personas } = req.body || {};
+    let body = req.body;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
+    const { simulation, personas } = body || {};
     if (!simulation || !simulation.name) {
       res.status(400).json({
         ok: false,
@@ -650,7 +658,7 @@ export async function handleSimulationRunRequest(req, res) {
       allPersonas: Array.isArray(personas) ? personas : [],
     });
 
-    res.json({
+    res.status(200).json({
       ok: true,
       results,
       researchBundle,

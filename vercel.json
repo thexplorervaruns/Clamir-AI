@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/ai/generate",
+      "destination": "/api/ai/generate.js"
+    },
+    {
+      "source": "/api/forecast/run",
+      "destination": "/api/forecast/run.js"
+    },
+    {
+      "source": "/api/research/search",
+      "destination": "/api/research/search.js"
+    },
+    {
+      "source": "/api/simulation/run",
+      "destination": "/api/simulation/run.js"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/platform.js?route=$1"
+    },
+    {
+      "source": "/((?!api/|assets/|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

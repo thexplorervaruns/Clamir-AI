@@ -69,8 +69,10 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
           headers: { Authorization: `Bearer ${authToken}` },
         });
         if (res.ok) {
-          const data = await res.json();
-          onUpdated(data.simulation);
+          const data = await res.json().catch(() => null);
+          if (data?.simulation) {
+            onUpdated(data.simulation);
+          }
         }
       } catch {
         // Ignore transient network poll error

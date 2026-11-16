@@ -115,6 +115,41 @@ function mergeConversationLists(
   );
 }
 
+function mergeSimulationLists(
+  lists: Simulation[][],
+  deletedIds: string[]
+): Simulation[] {
+  const deletedSet = new Set(deletedIds);
+  const map = new Map<string, Simulation>();
+
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const sim of list) {
+      if (!sim || !sim.id || deletedSet.has(sim.id)) continue;
+      const existing = map.get(sim.id);
+      if (!existing) {
+        map.set(sim.id, sim);
+      } else {
+        const existingCompleted = existing.status === 'Completed' && Boolean(existing.results);
+        const nextCompleted = sim.status === 'Completed' && Boolean(sim.results);
+        if (nextCompleted && !existingCompleted) {
+          map.set(sim.id, sim);
+        } else if (nextCompleted === existingCompleted) {
+          const existingHasFc = Boolean(existing.results?.timesfmForecast);
+          const nextHasFc = Boolean(sim.results?.timesfmForecast);
+          if (nextHasFc || !existingHasFc) {
+            map.set(sim.id, sim);
+          }
+        }
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime()
+  );
+}
+
 type AppView = 'landing' | 'auth' | 'workspace';
 type WorkspaceTab =
   | 'dashboard'
@@ -214,6 +249,10 @@ export default function App() {
         const userKey = session?.user?.id || user?.id || 'default';
         const deletedSimIds = loadLocalJson<string[]>(`clemir_deleted_sim_ids_${userKey}`, []);
         const deletedConvIds = loadLocalJson<string[]>(`clemir_deleted_conv_ids_${userKey}`, []);
+        const cachedLocalSims = loadLocalJson<Simulation[]>(
+          `clemir_simulations_${userKey}`,
+          []
+        );
         const cachedLocalConvs = loadLocalJson<AgentConversation[]>(
           `clemir_conversations_${userKey}`,
           []
@@ -232,10 +271,12 @@ export default function App() {
             }));
             setWorkspaces(supaData.workspaces);
             setActiveWorkspaceId(supaData.activeWorkspaceId);
-            const filteredSupaSims = (supaData.simulations || []).filter(
-              (s: Simulation) => !deletedSimIds.includes(s.id)
+            const mergedSupaSims = mergeSimulationLists(
+              [supaData.simulations || [], cachedLocalSims],
+              deletedSimIds
             );
-            setSimulations(filteredSupaSims);
+            setSimulations(mergedSupaSims);
+            saveLocalJson(`clemir_simulations_${userKey}`, mergedSupaSims);
             setPersonas(supaData.personas);
             setReports(supaData.reports || []);
             setRecentSearches(supaData.recentSearches || []);
@@ -245,10 +286,11 @@ export default function App() {
         const query = wsId ? `?workspaceId=${encodeURIComponent(wsId)}` : '';
         const res = await fetch(`/api/workspace/bootstrap${query}`, {
           headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const finalUserKey = session?.user?.id || data.user?.id || userKey;
+        }).catch(() => null);
+
+        if (res && res.ok) {
+          const data = await res.json().catch(() => null);
+          const finalUserKey = session?.user?.id || data?.user?.id || userKey;
           const finalDeletedSims = loadLocalJson<string[]>(
             `clemir_deleted_sim_ids_${finalUserKey}`,
             deletedSimIds
@@ -257,52 +299,93 @@ export default function App() {
             `clemir_deleted_conv_ids_${finalUserKey}`,
             deletedConvIds
           );
+          const finalLocalSims = loadLocalJson<Simulation[]>(
+            `clemir_simulations_${finalUserKey}`,
+            cachedLocalSims
+          );
           const finalLocalConvs = loadLocalJson<AgentConversation[]>(
             `clemir_conversations_${finalUserKey}`,
             cachedLocalConvs
           );
 
-          setUser((prev) => ({
-            ...data.user,
-            name: normalizeConsistentUserName(
-              data.user?.name || prev?.name,
-              data.user?.email || prev?.email
-            ),
-          }));
-          setWorkspaces(data.workspaces);
-          setActiveWorkspaceId(data.activeWorkspaceId);
-
-          // Merge Supabase + backend simulations while respecting manual deletions
-          const simMap = new Map<string, Simulation>();
-          for (const sim of [...(supaData?.simulations || []), ...(data.simulations || [])]) {
-            if (sim && sim.id && !finalDeletedSims.includes(sim.id)) {
-              simMap.set(sim.id, sim);
+          if (data && !data.stateless && data.user) {
+            setUser((prev) => ({
+              ...data.user,
+              name: normalizeConsistentUserName(
+                data.user?.name || prev?.name,
+                data.user?.email || prev?.email
+              ),
+            }));
+            if (Array.isArray(data.workspaces) && data.workspaces.length > 0) {
+              setWorkspaces(data.workspaces);
             }
-          }
-          setSimulations(Array.from(simMap.values()));
+            if (data.activeWorkspaceId) {
+              setActiveWorkspaceId(data.activeWorkspaceId);
+            }
 
-          setPersonas(data.personas);
+            const mergedSims = mergeSimulationLists(
+              [supaData?.simulations || [], data.simulations || [], finalLocalSims],
+              finalDeletedSims
+            );
+            setSimulations(mergedSims);
+            saveLocalJson(`clemir_simulations_${finalUserKey}`, mergedSims);
 
-          // Merge Supabase + backend + cached localStorage conversations (NEVER auto-delete)
-          const mergedConversations = mergeConversationLists(
-            [supaData?.conversations || [], data.conversations || [], finalLocalConvs],
-            finalDeletedConvs
-          );
-          setConversations(mergedConversations);
-          saveLocalJson(`clemir_conversations_${finalUserKey}`, mergedConversations);
+            if (Array.isArray(data.personas) && data.personas.length > 0) {
+              setPersonas(data.personas);
+            }
 
-          setReports(data.reports);
-          setRecentSearches(data.recentSearches);
-          if (data.platformConfig) {
-            setPlatformConfig(data.platformConfig);
+            const mergedConversations = mergeConversationLists(
+              [supaData?.conversations || [], data.conversations || [], finalLocalConvs],
+              finalDeletedConvs
+            );
+            setConversations(mergedConversations);
+            saveLocalJson(`clemir_conversations_${finalUserKey}`, mergedConversations);
+
+            if (Array.isArray(data.reports)) {
+              setReports(data.reports);
+            }
+            if (Array.isArray(data.recentSearches)) {
+              setRecentSearches(data.recentSearches);
+            }
+            if (data.platformConfig) {
+              setPlatformConfig(data.platformConfig);
+            }
+          } else {
+            // Stateless serverless backend (e.g. Vercel): merge Supabase + local storage without wiping state
+            const mergedStatelessSims = mergeSimulationLists(
+              [supaData?.simulations || [], finalLocalSims],
+              finalDeletedSims
+            );
+            setSimulations((prev) => {
+              const combined = mergeSimulationLists([mergedStatelessSims, prev], finalDeletedSims);
+              saveLocalJson(`clemir_simulations_${finalUserKey}`, combined);
+              return combined;
+            });
+
+            const mergedStatelessConvs = mergeConversationLists(
+              [supaData?.conversations || [], finalLocalConvs],
+              finalDeletedConvs
+            );
+            setConversations(mergedStatelessConvs);
+            saveLocalJson(`clemir_conversations_${finalUserKey}`, mergedStatelessConvs);
           }
         } else {
-          const mergedFallback = mergeConversationLists(
+          const mergedFallbackSims = mergeSimulationLists(
+            [supaData?.simulations || [], cachedLocalSims],
+            deletedSimIds
+          );
+          setSimulations((prev) => {
+            const combined = mergeSimulationLists([mergedFallbackSims, prev], deletedSimIds);
+            saveLocalJson(`clemir_simulations_${userKey}`, combined);
+            return combined;
+          });
+
+          const mergedFallbackConvs = mergeConversationLists(
             [supaData?.conversations || [], cachedLocalConvs],
             deletedConvIds
           );
-          setConversations(mergedFallback);
-          saveLocalJson(`clemir_conversations_${userKey}`, mergedFallback);
+          setConversations(mergedFallbackConvs);
+          saveLocalJson(`clemir_conversations_${userKey}`, mergedFallbackConvs);
         }
       } catch {
         // Keep current state on offline
@@ -470,9 +553,11 @@ export default function App() {
   // Workspace CRUD handlers
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newWorkspaceName.trim()) return;
+    const cleanName = newWorkspaceName.trim();
+    if (!cleanName) return;
+    let createdWs: Workspace | null = null;
     if (user) {
-      await createWorkspaceInSupabase(user.id, newWorkspaceName.trim()).catch(() => null);
+      createdWs = await createWorkspaceInSupabase(user.id, cleanName).catch(() => null);
     }
     const res = await fetch('/api/workspaces', {
       method: 'POST',
@@ -480,22 +565,38 @@ export default function App() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ name: newWorkspaceName.trim() }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setWorkspaces(data.workspaces);
-      setActiveWorkspaceId(data.workspace.id);
-      setNewWorkspaceName('');
-      setSelectedSimId(null);
-      setCreatingSim(false);
+      body: JSON.stringify({ name: cleanName }),
+    }).catch(() => null);
+    if (res && res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && !data.stateless && data.workspace && Array.isArray(data.workspaces)) {
+        setWorkspaces(data.workspaces);
+        setActiveWorkspaceId(data.workspace.id);
+        setNewWorkspaceName('');
+        setSelectedSimId(null);
+        setCreatingSim(false);
+        return;
+      }
     }
+    const nextWs: Workspace = createdWs || {
+      id: `ws-${Date.now()}`,
+      name: cleanName,
+      ownerId: user?.id || 'default',
+      createdAt: new Date().toISOString(),
+      role: 'Owner',
+    };
+    setWorkspaces((prev) => [...prev, nextWs]);
+    setActiveWorkspaceId(nextWs.id);
+    setNewWorkspaceName('');
+    setSelectedSimId(null);
+    setCreatingSim(false);
   };
 
   const handleRenameWorkspace = async (wsId: string) => {
-    if (!renameWorkspaceValue.trim()) return;
+    const cleanName = renameWorkspaceValue.trim();
+    if (!cleanName) return;
     if (user) {
-      await renameWorkspaceInSupabase(user.id, wsId, renameWorkspaceValue.trim()).catch(() => null);
+      await renameWorkspaceInSupabase(user.id, wsId, cleanName).catch(() => null);
     }
     const res = await fetch(`/api/workspaces/${wsId}`, {
       method: 'PUT',
@@ -503,14 +604,22 @@ export default function App() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ name: renameWorkspaceValue.trim() }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setWorkspaces(data.workspaces);
-      setRenamingWorkspaceId(null);
-      setRenameWorkspaceValue('');
+      body: JSON.stringify({ name: cleanName }),
+    }).catch(() => null);
+    if (res && res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data && !data.stateless && Array.isArray(data.workspaces)) {
+        setWorkspaces(data.workspaces);
+        setRenamingWorkspaceId(null);
+        setRenameWorkspaceValue('');
+        return;
+      }
     }
+    setWorkspaces((prev) =>
+      prev.map((w) => (w.id === wsId ? { ...w, name: cleanName } : w))
+    );
+    setRenamingWorkspaceId(null);
+    setRenameWorkspaceValue('');
   };
 
   // Simulation actions from Dashboard / Simulations list
@@ -569,8 +678,12 @@ export default function App() {
       saveLocalJson(`clemir_deleted_sim_ids_${userKey}`, [...deletedSimIds, simId]);
     }
 
-    // Immediately remove from UI state so manual deletion feels instant
-    setSimulations((prev) => prev.filter((s) => s.id !== simId));
+    // Immediately remove from UI state & local cache so manual deletion feels instant
+    setSimulations((prev) => {
+      const next = prev.filter((s) => s.id !== simId);
+      saveLocalJson(`clemir_simulations_${userKey}`, next);
+      return next;
+    });
     setConfirmDeleteSimId(null);
     if (selectedSimId === simId) setSelectedSimId(null);
 
@@ -1332,14 +1445,27 @@ export default function App() {
                     initialType={createSimInitialType}
                     personas={personas}
                     authToken={authToken}
+                    activeWorkspaceId={activeWorkspaceId}
                     onCancel={() => setCreatingSim(false)}
                     onPersonasChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                     onOpenAgent={() => setActiveTab('agent')}
-                    onSimulationStarted={(newSimId) => {
+                    onSimulationStarted={(newSimId, createdSim) => {
+                      const userKey = user?.id || 'default';
+                      if (createdSim) {
+                        const deletedIds = loadLocalJson<string[]>(
+                          `clemir_deleted_sim_ids_${userKey}`,
+                          []
+                        );
+                        setSimulations((prev) => {
+                          const next = mergeSimulationLists([[createdSim], prev], deletedIds);
+                          saveLocalJson(`clemir_simulations_${userKey}`, next);
+                          return next;
+                        });
+                      }
                       setCreatingSim(false);
-                      fetchWorkspaceState(authToken, activeWorkspaceId);
                       setSelectedSimId(newSimId);
                       setAgentFocusSimId(newSimId);
+                      fetchWorkspaceState(authToken, activeWorkspaceId);
                     }}
                   />
                 ) : activeSimObj ? (
@@ -1348,9 +1474,12 @@ export default function App() {
                     authToken={authToken}
                     onBack={() => setSelectedSimId(null)}
                     onUpdated={(updatedSim) => {
-                      setSimulations((prev) =>
-                        prev.map((s) => (s.id === updatedSim.id ? updatedSim : s))
-                      );
+                      const userKey = user?.id || 'default';
+                      setSimulations((prev) => {
+                        const next = prev.map((s) => (s.id === updatedSim.id ? updatedSim : s));
+                        saveLocalJson(`clemir_simulations_${userKey}`, next);
+                        return next;
+                      });
                       if (user && updatedSim.status === 'Completed') {
                         saveSimulationToSupabase(user.id, activeWorkspaceId, updatedSim).catch(
                           () => null

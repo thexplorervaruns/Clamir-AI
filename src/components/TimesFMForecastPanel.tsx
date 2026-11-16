@@ -124,38 +124,115 @@ export const TimesFMForecastPanel: React.FC<TimesFMForecastPanelProps> = ({
 
     setRunning(true);
     try {
-      const res = await fetch(`/api/simulations/${simulation.id}/forecast`, {
+      const payload = {
+        seriesName: seriesName.trim() || `${simulation.name} Core Metric`,
+        unitLabel: unitLabel.trim(),
+        frequency,
+        horizon,
+        patchLength,
+        seasonalPeriod,
+        domainContext: [simulation.researchContext, simulation.hypothesis, simulation.targetAudience]
+          .filter(Boolean)
+          .join(' | '),
+        rawData: inputMode === 'text' ? rawData : undefined,
+        points: inputMode === 'table' ? pointsPayload : undefined,
+        enableWebSearch: true,
+      };
+
+      let updatedSim: Simulation | null = null;
+      let errText = '';
+
+      const res = await fetch(`/api/simulations/${encodeURIComponent(simulation.id)}/forecast`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({
-          seriesName: seriesName.trim() || `${simulation.name} Core Metric`,
-          unitLabel: unitLabel.trim(),
-          frequency,
-          horizon,
-          patchLength,
-          seasonalPeriod,
-          rawData: inputMode === 'text' ? rawData : undefined,
-          points: inputMode === 'table' ? pointsPayload : undefined,
-          enableWebSearch: true,
-        }),
-      });
+        body: JSON.stringify(payload),
+      }).catch(() => null);
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !data.simulation) {
-        setErrorMsg(
-          data?.error || 'Could not generate TimesFM forecast from the provided observations.'
-        );
+      if (res) {
+        const text = await res.text().catch(() => '');
+        let data: any = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = null;
+        }
+        if (res.ok && data?.ok && data?.simulation) {
+          updatedSim = data.simulation as Simulation;
+        } else if (res.ok && data?.ok && data?.result) {
+          updatedSim = {
+            ...simulation,
+            forecastConfig: {
+              enabled: true,
+              seriesName: payload.seriesName,
+              unitLabel: payload.unitLabel,
+              frequency: payload.frequency,
+              horizon: payload.horizon,
+              patchLength: payload.patchLength,
+              seasonalPeriod: payload.seasonalPeriod,
+              rawData: payload.rawData,
+              points: payload.points,
+            },
+            results: simulation.results
+              ? { ...simulation.results, timesfmForecast: data.result as TimesFMForecastResult }
+              : undefined,
+          };
+        } else if (data?.error && res.status !== 404 && res.status !== 405) {
+          errText = data.error;
+        }
+      }
+
+      if (!updatedSim && !errText) {
+        const fbRes = await fetch('/api/forecast/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => null);
+
+        if (fbRes) {
+          const fbText = await fbRes.text().catch(() => '');
+          let fbData: any = null;
+          try {
+            fbData = fbText ? JSON.parse(fbText) : null;
+          } catch {
+            fbData = null;
+          }
+          if (fbRes.ok && fbData?.ok && fbData?.result) {
+            updatedSim = {
+              ...simulation,
+              forecastConfig: {
+                enabled: true,
+                seriesName: payload.seriesName,
+                unitLabel: payload.unitLabel,
+                frequency: payload.frequency,
+                horizon: payload.horizon,
+                patchLength: payload.patchLength,
+                seasonalPeriod: payload.seasonalPeriod,
+                rawData: payload.rawData,
+                points: payload.points,
+              },
+              results: simulation.results
+                ? { ...simulation.results, timesfmForecast: fbData.result as TimesFMForecastResult }
+                : undefined,
+            };
+          } else {
+            errText = fbData?.error || 'Could not generate TimesFM forecast from the provided observations.';
+          }
+        }
+      }
+
+      if (!updatedSim) {
+        setErrorMsg(errText || 'Could not generate TimesFM forecast from the provided observations.');
         return;
       }
 
-      onSimulationUpdated(data.simulation);
+      onSimulationUpdated(updatedSim);
       setEditingSeries(false);
       setHoverIndex(null);
     } catch {
-      setErrorMsg('Network error while contacting the TimesFM simulation engine.');
+      setErrorMsg('Unable to contact the TimesFM simulation engine. Please try again.');
     } finally {
       setRunning(false);
     }

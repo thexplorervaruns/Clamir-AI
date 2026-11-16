@@ -25,6 +25,7 @@ import {
   QuestionType,
   ResearchMaterialItem,
   SelectedPersonaConfig,
+  Simulation,
   SimulationForecastConfig,
   SimulationQuestion,
   SimulationTypeId,
@@ -40,8 +41,9 @@ interface SimulationCreatorProps {
   initialType?: SimulationTypeId;
   personas: Persona[];
   authToken: string;
+  activeWorkspaceId?: string;
   onCancel: () => void;
-  onSimulationStarted: (simulationId: string) => void;
+  onSimulationStarted: (simulationId: string, createdSimulation?: Simulation) => void;
   onPersonasChanged?: () => void;
   onOpenAgent?: () => void;
 }
@@ -49,10 +51,21 @@ interface SimulationCreatorProps {
 const ALLOWED_EXTENSIONS = ['txt', 'md', 'csv', 'json', 'pdf', 'docx'];
 const MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024; // 8MB
 
+async function readJsonSafe(res: Response): Promise<{ ok: boolean; data: any }> {
+  try {
+    const text = await res.text();
+    if (!text) return { ok: res.ok, data: {} };
+    return { ok: res.ok, data: JSON.parse(text) };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
 export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   initialType = 'test_idea',
   personas,
   authToken,
+  activeWorkspaceId = 'ws-default',
   onCancel,
   onSimulationStarted,
   onPersonasChanged,
@@ -165,73 +178,74 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
       customAgentCount.trim() === '' ? 1 : Math.max(1, Number(customAgentCount));
 
     try {
+      const personaDraft = {
+        name: cleanName,
+        segment: cleanSegment || 'Custom Segment',
+        tagline: cleanTagline,
+        description: cleanTagline,
+        avatarCode: cleanName.slice(0, 2).toUpperCase(),
+        tags: cleanSegment ? [cleanSegment] : [],
+        characteristics: [],
+        preferences: [],
+        motivations: [],
+        purchasingBehavior: '',
+        decisionFactors: [],
+        concerns: [],
+        context: cleanContext,
+        priceSensitivity: customPriceSensitivity,
+        decisionSpeed: customDecisionSpeed,
+        brandLoyalty: parsedLoyalty,
+      };
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      let savedId = `custom-aud-${Date.now()}`;
+      let savedName = cleanName;
+
+      if (session?.user) {
+        const supaSaved = await savePersonaToSupabase(
+          session.user.id,
+          activeWorkspaceId || 'ws-default',
+          personaDraft
+        ).catch(() => null);
+        if (supaSaved?.id) {
+          savedId = supaSaved.id;
+          savedName = supaSaved.name;
+        }
+      }
+
       const res = await fetch('/api/personas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({
-          name: cleanName,
-          segment: cleanSegment,
-          tagline: cleanTagline,
-          description: cleanTagline,
-          avatarCode: cleanName.slice(0, 2).toUpperCase(),
-          tags: cleanSegment ? [cleanSegment] : [],
-          characteristics: [],
-          preferences: [],
-          motivations: [],
-          purchasingBehavior: '',
-          decisionFactors: [],
-          concerns: [],
-          context: cleanContext,
-          priceSensitivity: customPriceSensitivity,
-          decisionSpeed: customDecisionSpeed,
-          brandLoyalty: parsedLoyalty,
-        }),
-      });
+        body: JSON.stringify({ ...personaDraft, workspaceId: activeWorkspaceId }),
+      }).catch(() => null);
 
-      if (res.ok) {
-        const data = await res.json();
-        const created: Persona = data.persona;
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session?.user) {
-          await savePersonaToSupabase(
-            session.user.id,
-            created.workspaceId || 'ws-default',
-            created
-          ).catch(() => null);
+      if (res && res.ok) {
+        const { data } = await readJsonSafe(res);
+        if (data?.persona?.id && savedId.startsWith('custom-aud-')) {
+          savedId = data.persona.id;
+          savedName = data.persona.name || cleanName;
         }
-        if (onPersonasChanged) onPersonasChanged();
-        setSelectedPersonas((prev) => [
-          ...prev.filter((p) => p.personaId !== created.id),
-          {
-            personaId: created.id,
-            personaName: created.name,
-            agentCount: parsedAgents,
-          },
-        ]);
-        setAgentCountInputs((prev) => ({
-          ...prev,
-          [created.id]: customAgentCount.trim(),
-        }));
-      } else {
-        const adHocId = `custom-aud-${Date.now()}`;
-        setSelectedPersonas((prev) => [
-          ...prev,
-          {
-            personaId: adHocId,
-            personaName: cleanName,
-            agentCount: parsedAgents,
-          },
-        ]);
-        setAgentCountInputs((prev) => ({
-          ...prev,
-          [adHocId]: customAgentCount.trim(),
-        }));
       }
+
+      if (onPersonasChanged) onPersonasChanged();
+      setSelectedPersonas((prev) => [
+        ...prev.filter((p) => p.personaId !== savedId),
+        {
+          personaId: savedId,
+          personaName: savedName,
+          agentCount: parsedAgents,
+        },
+      ]);
+      setAgentCountInputs((prev) => ({
+        ...prev,
+        [savedId]: customAgentCount.trim(),
+      }));
 
       setCustomPersonaName('');
       setCustomPersonaSegment('');
@@ -309,7 +323,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
 
   const handleExtractUrl = async () => {
     setError(null);
-    if (!urlInput.trim()) {
+    const trimmedUrl = urlInput.trim();
+    if (!trimmedUrl) {
       setError('Please enter a valid website URL (https://...).');
       return;
     }
@@ -319,26 +334,57 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ url: urlInput.trim() }),
+        body: JSON.stringify({ url: trimmedUrl }),
+      }).catch(() => null);
+
+      if (res) {
+        const { ok, data } = await readJsonSafe(res);
+        if (ok && data?.extractedContent) {
+          setMaterials((prev) => [
+            ...prev,
+            {
+              id: `mat-url-${Date.now()}`,
+              kind: 'url',
+              name: data.title || trimmedUrl,
+              url: trimmedUrl,
+              extractedContent: data.extractedContent,
+              addedAt: new Date().toISOString(),
+            },
+          ]);
+          setUrlInput('');
+          return;
+        }
+        if (data?.error && res.status !== 404 && res.status !== 405) {
+          setError(data.error);
+          return;
+        }
+      }
+
+      // Serverless fallback via /api/research/search
+      const fallbackRes = await fetch('/api/research/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: [trimmedUrl] }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Could not extract URL content safely.');
-      } else {
+      const fb = await readJsonSafe(fallbackRes);
+      const firstSource = fb.data?.sources?.[0];
+      if (fb.ok && firstSource?.excerpt) {
         setMaterials((prev) => [
           ...prev,
           {
             id: `mat-url-${Date.now()}`,
             kind: 'url',
-            name: data.title || urlInput.trim(),
-            url: urlInput.trim(),
-            extractedContent: data.extractedContent,
+            name: firstSource.title || trimmedUrl,
+            url: trimmedUrl,
+            extractedContent: firstSource.excerpt,
             addedAt: new Date().toISOString(),
           },
         ]);
         setUrlInput('');
+      } else {
+        setError(fb.data?.error || 'Could not extract URL content safely.');
       }
     } catch {
       setError('Failed to connect to URL extraction service.');
@@ -478,76 +524,158 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         };
       });
 
+      const resolvedForecastConfig: SimulationForecastConfig | undefined =
+        fcEnabled || fcRawData.trim()
+          ? {
+              enabled: true,
+              seriesName: fcSeriesName.trim() || `${name.trim()} Core Metric`,
+              unitLabel: fcUnitLabel.trim(),
+              frequency: fcFrequency,
+              horizon: fcHorizon,
+              patchLength: fcPatchLength,
+              seasonalPeriod: fcSeasonalPeriod,
+              rawData: fcRawData,
+            }
+          : undefined;
+
+      const simulationPayload = {
+        workspaceId: activeWorkspaceId || 'ws-default',
+        name: name.trim(),
+        type: simType,
+        description: description.trim(),
+        hypothesis: hypothesis.trim(),
+        researchContext: researchContext.trim(),
+        targetAudience:
+          targetAudience.trim() ||
+          effectivePersonas.map((p) => p.personaName).join(', '),
+        researchObjectives: researchObjectives.trim(),
+        typeSpecificData: {
+          optionADescription,
+          optionBDescription,
+          comparisonCriteria: comparisonCriteria.trim() || comparisonNotes.trim(),
+          processNotes: processNotes.trim(),
+          resultsNotes: resultsNotes.trim(),
+          marketOrIndustry,
+          productOrService,
+          questionsToExplore,
+          websiteOrProductUrl,
+          userTask,
+          usabilityQuestions,
+          currency,
+          pricingTiers,
+          customerSegment,
+          customerProfile,
+          customFields,
+        },
+        materials,
+        questions,
+        selectedPersonas: effectivePersonas,
+        forecastConfig: resolvedForecastConfig,
+        personas,
+      };
+
+      let finalSim: Simulation | null = null;
+      let primaryError = '';
+
+      // 1. Try /api/simulations (local Express background worker OR Vercel /api/platform.js)
       const res = await fetch('/api/simulations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({
-          name: name.trim(),
-          type: simType,
-          description: description.trim(),
-          hypothesis: hypothesis.trim(),
-          researchContext: researchContext.trim(),
-          targetAudience:
-            targetAudience.trim() ||
-            effectivePersonas.map((p) => p.personaName).join(', '),
-          researchObjectives: researchObjectives.trim(),
-          typeSpecificData: {
-            optionADescription,
-            optionBDescription,
-            comparisonCriteria: comparisonCriteria.trim() || comparisonNotes.trim(),
-            processNotes: processNotes.trim(),
-            resultsNotes: resultsNotes.trim(),
-            marketOrIndustry,
-            productOrService,
-            questionsToExplore,
-            websiteOrProductUrl,
-            userTask,
-            usabilityQuestions,
-            currency,
-            pricingTiers,
-            customerSegment,
-            customerProfile,
-            customFields,
-          },
-          materials,
-          questions,
-          selectedPersonas: effectivePersonas,
-          forecastConfig:
-            fcEnabled || fcRawData.trim()
-              ? ({
-                  enabled: true,
-                  seriesName: fcSeriesName.trim() || `${name.trim()} Core Metric`,
-                  unitLabel: fcUnitLabel.trim(),
-                  frequency: fcFrequency,
-                  horizon: fcHorizon,
-                  patchLength: fcPatchLength,
-                  seasonalPeriod: fcSeasonalPeriod,
-                  rawData: fcRawData,
-                } satisfies SimulationForecastConfig)
-              : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Failed to launch simulation.');
-      } else {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (session?.user && data.simulation) {
-          await saveSimulationToSupabase(
-            session.user.id,
-            data.simulation.workspaceId,
-            data.simulation
-          ).catch(() => null);
+        body: JSON.stringify(simulationPayload),
+      }).catch(() => null);
+
+      if (res) {
+        const parsed = await readJsonSafe(res);
+        if (res.ok && parsed.data?.simulation) {
+          finalSim = parsed.data.simulation as Simulation;
+        } else if (parsed.data?.error && res.status >= 400 && res.status < 500 && res.status !== 404 && res.status !== 405) {
+          primaryError = parsed.data.error;
         }
-        onSimulationStarted(data.simulation.id);
       }
-    } catch {
-      setError('Network error while starting simulation.');
+
+      // 2. Fallback to direct stateless serverless execution (/api/simulation/run)
+      if (!finalSim && !primaryError) {
+        const directRes = await fetch('/api/simulation/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({
+            simulation: simulationPayload,
+            personas,
+          }),
+        }).catch(() => null);
+
+        if (directRes) {
+          const directParsed = await readJsonSafe(directRes);
+          if (directRes.ok && directParsed.data?.ok && directParsed.data?.results) {
+            finalSim = {
+              id:
+                typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                  ? crypto.randomUUID()
+                  : `sim-${Date.now()}`,
+              workspaceId: activeWorkspaceId || 'ws-default',
+              name: simulationPayload.name,
+              type: simulationPayload.type,
+              description: simulationPayload.description,
+              hypothesis: simulationPayload.hypothesis,
+              researchContext: simulationPayload.researchContext,
+              targetAudience: simulationPayload.targetAudience,
+              researchObjectives: simulationPayload.researchObjectives,
+              typeSpecificData: simulationPayload.typeSpecificData,
+              materials: simulationPayload.materials,
+              questions: simulationPayload.questions,
+              selectedPersonas: simulationPayload.selectedPersonas,
+              forecastConfig: resolvedForecastConfig,
+              status: 'Completed',
+              stage: 'Completed',
+              progress: 100,
+              startedAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              estimatedSecondsRemaining: 0,
+              results: directParsed.data.results,
+            };
+          } else {
+            primaryError =
+              directParsed.data?.error ||
+              `Simulation service returned HTTP ${directRes.status}.`;
+          }
+        }
+      }
+
+      if (!finalSim) {
+        setError(
+          primaryError ||
+            'Unable to reach simulation API endpoint. Please verify Vercel API deployment and try again.'
+        );
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        const supaSaved = await saveSimulationToSupabase(
+          session.user.id,
+          finalSim.workspaceId || activeWorkspaceId || 'ws-default',
+          finalSim
+        ).catch(() => null);
+        if (supaSaved) {
+          finalSim = supaSaved as Simulation;
+        }
+      }
+
+      onSimulationStarted(finalSim.id, finalSim);
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Unable to start simulation. Please check your connection and try again.'
+      );
     } finally {
       setSubmitting(false);
     }

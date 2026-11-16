@@ -60,7 +60,7 @@ export async function searchWithFirecrawl(query, limit = 5) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 14000);
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch("https://api.firecrawl.dev/v1/search", {
       method: "POST",
@@ -160,7 +160,7 @@ export async function scrapeUrlWithFirecrawl(targetUrl) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 7500);
     const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
       signal: controller.signal,
@@ -202,6 +202,106 @@ export async function scrapeUrlWithFirecrawl(targetUrl) {
 }
 
 /**
+ * Extracts text content from a public HTTP/HTTPS URL using Firecrawl first
+ * and falling back to safe direct HTML fetch if Firecrawl is unconfigured.
+ */
+export async function extractUrlContentSafely(targetUrl) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(String(targetUrl || "").trim());
+  } catch {
+    return { ok: false, status: 400, error: "Invalid URL format." };
+  }
+
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    return { ok: false, status: 400, error: "Only HTTP and HTTPS URLs are permitted." };
+  }
+
+  const host = parsedUrl.hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host.endsWith(".local") ||
+    host === "169.254.169.254"
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Access to internal or private network addresses is blocked.",
+    };
+  }
+
+  const fcScrape = await scrapeUrlWithFirecrawl(parsedUrl.toString());
+  if (fcScrape.ok && fcScrape.extractedContent) {
+    return {
+      ok: true,
+      url: parsedUrl.toString(),
+      title: fcScrape.title || parsedUrl.hostname,
+      extractedContent: fcScrape.extractedContent.slice(0, 2500),
+    };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const res = await fetch(parsedUrl.toString(), {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "ClemirAI-Research-Bot/1.0 (+https://clemir.ai)",
+        Accept: "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8",
+      },
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: 400,
+        error: `Target URL returned HTTP ${res.status}. You can paste its text into a TXT/MD file instead.`,
+      };
+    }
+
+    const html = await res.text();
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : parsedUrl.hostname;
+    const stripped = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!stripped) {
+      return {
+        ok: false,
+        status: 400,
+        error: "No readable text found on that page. Please copy and upload as TXT/MD.",
+      };
+    }
+
+    return {
+      ok: true,
+      url: parsedUrl.toString(),
+      title,
+      extractedContent: stripped.slice(0, 2500),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        err instanceof Error && err.name === "AbortError"
+          ? "Request timed out fetching the URL."
+          : "Could not fetch URL from server. Try pasting its text into a TXT/MD file.",
+    };
+  }
+}
+
+/**
  * Crawl / search via Spider API (https://api.spider.cloud/search and /scrape).
  * Never fakes a response if Spider is unconfigured or unavailable.
  */
@@ -219,7 +319,7 @@ export async function searchWithSpider(query, limit = 4) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), 7000);
     const response = await fetch("https://api.spider.cloud/search", {
       method: "POST",
       signal: controller.signal,
@@ -318,7 +418,7 @@ export async function searchWithPublicWeb(query, limit = 5) {
   const ddgHtmlPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
+      const timeout = setTimeout(() => controller.abort(), 5000);
       const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
       const res = await fetch(url, {
         signal: controller.signal,
@@ -373,7 +473,7 @@ export async function searchWithPublicWeb(query, limit = 5) {
   const wikiPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 7000);
+      const timeout = setTimeout(() => controller.abort(), 4500);
       const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
         cleanQuery
       )}&srlimit=3&format=json&origin=*`;
@@ -412,7 +512,7 @@ export async function searchWithPublicWeb(query, limit = 5) {
   const ddgInstantPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
+      const timeout = setTimeout(() => controller.abort(), 4500);
       const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(
         cleanQuery
       )}&format=json&no_html=1&skip_disambig=1`;
@@ -482,60 +582,78 @@ export async function performRealTimeWebResearch({
   const providerDiagnostics = [];
   const rawSources = [];
 
-  for (const q of cleanQueries) {
-    const [fcRes, spRes] = await Promise.all([
-      searchWithFirecrawl(q, maxResultsPerQuery),
-      searchWithSpider(q, Math.min(3, maxResultsPerQuery)),
-    ]);
+  const queryResults = await Promise.all(
+    cleanQueries.map(async (q) => {
+      const [fcRes, spRes] = await Promise.all([
+        searchWithFirecrawl(q, maxResultsPerQuery),
+        searchWithSpider(q, Math.min(3, maxResultsPerQuery)),
+      ]);
 
-    let publicFallback = null;
-    if (fcRes.sources.length === 0 && spRes.sources.length === 0) {
-      publicFallback = await searchWithPublicWeb(q, maxResultsPerQuery + 1);
-      rawSources.push(...publicFallback.sources);
-    }
+      let publicFallback = null;
+      const querySources = [...fcRes.sources, ...spRes.sources];
+      if (fcRes.sources.length === 0 && spRes.sources.length === 0) {
+        publicFallback = await searchWithPublicWeb(q, maxResultsPerQuery + 1);
+        querySources.push(...publicFallback.sources);
+      }
 
-    providerDiagnostics.push({
-      query: q,
-      firecrawl: {
-        configured: fcRes.configured,
-        ok: fcRes.ok,
-        count: fcRes.sources.length,
-        error: fcRes.error,
-      },
-      spider: {
-        configured: spRes.configured,
-        ok: spRes.ok,
-        count: spRes.sources.length,
-        error: spRes.error,
-      },
-      publicWeb: publicFallback
-        ? {
-            configured: true,
-            ok: publicFallback.ok,
-            count: publicFallback.sources.length,
-            error: publicFallback.error,
-          }
-        : undefined,
-    });
+      return {
+        diag: {
+          query: q,
+          firecrawl: {
+            configured: fcRes.configured,
+            ok: fcRes.ok,
+            count: fcRes.sources.length,
+            error: fcRes.error,
+          },
+          spider: {
+            configured: spRes.configured,
+            ok: spRes.ok,
+            count: spRes.sources.length,
+            error: spRes.error,
+          },
+          publicWeb: publicFallback
+            ? {
+                configured: true,
+                ok: publicFallback.ok,
+                count: publicFallback.sources.length,
+                error: publicFallback.error,
+              }
+            : undefined,
+        },
+        querySources,
+      };
+    })
+  );
 
-    rawSources.push(...fcRes.sources, ...spRes.sources);
+  for (const item of queryResults) {
+    providerDiagnostics.push(item.diag);
+    rawSources.push(...item.querySources);
   }
 
-  // Also scrape any explicit URLs attached by the user via Firecrawl
-  for (const targetUrl of (Array.isArray(urlsToScrape) ? urlsToScrape : []).slice(0, 2)) {
-    if (targetUrl && /^https?:\/\//i.test(targetUrl)) {
-      const scraped = await scrapeUrlWithFirecrawl(targetUrl);
-      if (scraped.ok) {
-        rawSources.push({
-          provider: "Firecrawl Scrape",
-          title: scraped.title,
-          url: targetUrl,
-          publishedDate: scraped.publishedDate,
-          authorityTier: scoreAuthority(targetUrl),
-          excerpt: scraped.extractedContent,
-          retrievedAt: new Date().toISOString(),
-        });
-      }
+  // Also scrape any explicit URLs attached by the user in parallel
+  const validUrls = (Array.isArray(urlsToScrape) ? urlsToScrape : [])
+    .filter((u) => u && /^https?:\/\//i.test(u))
+    .slice(0, 2);
+
+  if (validUrls.length > 0) {
+    const scrapedList = await Promise.all(
+      validUrls.map(async (targetUrl) => {
+        const scraped = await extractUrlContentSafely(targetUrl);
+        return scraped.ok
+          ? {
+              provider: "URL Extract",
+              title: scraped.title,
+              url: targetUrl,
+              publishedDate: null,
+              authorityTier: scoreAuthority(targetUrl),
+              excerpt: scraped.extractedContent,
+              retrievedAt: new Date().toISOString(),
+            }
+          : null;
+      })
+    );
+    for (const s of scrapedList) {
+      if (s) rawSources.push(s);
     }
   }
 

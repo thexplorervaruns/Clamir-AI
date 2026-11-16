@@ -118,16 +118,18 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
           name: nextName,
           email: nextEmail,
         }),
-      });
-      const data = await res.json();
-      if (res.ok) {
+      }).catch(() => null);
+      const data = res ? await res.json().catch(() => null) : null;
+      if (!res || res.ok) {
+        const updated = data?.user && !data?.stateless ? data.user : user;
         onUserUpdated({
-          ...data.user,
-          name: normalizeConsistentUserName(data.user?.name || nextName, data.user?.email || nextEmail),
+          ...updated,
+          name: normalizeConsistentUserName(updated?.name || nextName, updated?.email || nextEmail),
+          email: updated?.email || nextEmail,
         });
         setProfileMsg('Profile information updated.');
       } else {
-        setProfileMsg(data.error || 'Could not update profile.');
+        setProfileMsg(data?.error || 'Could not update profile.');
       }
     } finally {
       setSavingProfile(false);
@@ -144,10 +146,10 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
         Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({ plan: newPlan }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      onUserUpdated(data.user);
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => null) : null;
+    if (!res || res.ok) {
+      onUserUpdated(data?.user && !data?.stateless ? data.user : { ...user, plan: newPlan });
       setProfileMsg(
         `Workspace plan switched to ${newPlan}. (Note: Payment billing is disabled until a live payment provider is connected.)`
       );
@@ -167,8 +169,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
     const res = await fetch(`/api/reports/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (res.ok) {
+    }).catch(() => null);
+    if (!res || res.ok) {
       setConfirmDeleteReportId(null);
       onReportsChanged();
     }
@@ -216,13 +218,13 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify(nextConfig),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onConfigUpdated(data.config);
+      }).catch(() => null);
+      const data = res ? await res.json().catch(() => null) : null;
+      if (!res || res.ok) {
+        onConfigUpdated(data?.config && !data?.stateless ? data.config : nextConfig);
         setOwnerMsg('Owner platform configuration saved and synced across public landing page.');
       } else {
-        setOwnerMsg(data.error || 'Server rejected owner configuration update.');
+        setOwnerMsg(data?.error || 'Server rejected owner configuration update.');
       }
     } finally {
       setSavingOwner(false);

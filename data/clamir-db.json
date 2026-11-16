@@ -81,6 +81,21 @@
       "token": "b0a2b63ad317943568f5e041ce3d709099764e5ef085e039",
       "userId": "user-owner-1",
       "createdAt": "2026-11-16T14:31:39.316Z"
+    },
+    {
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImM0MDNiYTNjLTJmZDctNDZiMy1iZTZlLWFmM2NlOGQ1NzBhOSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3ZmcmtpdWdxZW92ZXFlZGl6ZmdrLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzk0ODQ3MDU4LCJpYXQiOjE3OTQ4NDM0NTgsImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc5NDc0NjEwNX1dLCJzZXNzaW9uX2lkIjoiOWQ0OTBjNDEtZDA4NC00M2FkLWI1ZDUtYzEyZTc3ODI0NjJkIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.mTjeqACdbSBeNg2hggzhYBd-UFyhDx-4VN9Del77wykbwUTalOtCulyXNsVIazU0uEjx6K3HENXYE66jViNJAg",
+      "userId": "user-1794743591865",
+      "createdAt": "2026-11-16T15:52:12.809Z"
+    },
+    {
+      "token": "495bc2ce62645a967c818e4535da73789559a4af0cd7d5b1",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T15:58:56.326Z"
+    },
+    {
+      "token": "7b8063bd75f58d7e2908bf27e309ec6a684a3a0bb0f3119e",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T15:59:02.219Z"
     }
   ],
   "workspaces": [
@@ -107,6 +122,14 @@
   "conversations": [],
   "reports": [],
   "recentSearches": [
+    {
+      "id": "rs-1794844736331",
+      "workspaceId": "ws-default",
+      "query": "Local Server Verification",
+      "category": "Simulation",
+      "targetId": "56e4b013-fab1-4406-8e6c-02ad8e4c68df",
+      "timestamp": "2026-11-16T15:58:56.331Z"
+    },
     {
       "id": "rs-1794839499348",
       "workspaceId": "ws-default",

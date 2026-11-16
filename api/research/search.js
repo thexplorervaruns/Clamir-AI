@@ -691,12 +691,24 @@ export async function performRealTimeWebResearch({
   };
 }
 
+function parseResearchBody(req) {
+  if (!req || req.body === undefined || req.body === null) return {};
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return req.body;
+}
+
 /**
  * Express / Serverless HTTP handler for POST /api/research/search
  */
 export async function handleResearchSearchRequest(req, res) {
   try {
-    const { query, queries, urls } = req.body || {};
+    const { query, queries, urls } = parseResearchBody(req);
     const queryList = Array.isArray(queries)
       ? queries
       : query

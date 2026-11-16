@@ -1193,14 +1193,20 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     const user = req.user!;
     const activeWs = db.workspaces.find((w) => w.ownerId === user.id) || db.workspaces[0];
     const b = req.body || {};
+    const requestedWs =
+      b.workspaceId && db.workspaces.some((w) => w.id === b.workspaceId)
+        ? String(b.workspaceId)
+        : activeWs.id;
+    const targetId = String(b.id || `persona-custom-${Date.now()}`);
 
+    const cleanName = String(b.name || 'Custom Persona').trim();
     const newPersona: Persona = {
-      id: `persona-custom-${Date.now()}`,
-      workspaceId: activeWs.id,
-      name: String(b.name || 'Custom Persona').trim(),
+      id: targetId,
+      workspaceId: requestedWs,
+      name: cleanName,
       tagline: String(b.tagline || '').trim(),
       description: String(b.description || '').trim(),
-      avatarCode: String(b.avatarCode || 'CP').slice(0, 3).toUpperCase(),
+      avatarCode: String(b.avatarCode || cleanName.slice(0, 2) || 'CP').slice(0, 3).toUpperCase(),
       segment: String(b.segment || 'Custom Segment').trim(),
       tags: Array.isArray(b.tags) ? b.tags : [],
       characteristics: Array.isArray(b.characteristics) ? b.characteristics : [],
@@ -1212,13 +1218,18 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       context: String(b.context || '').trim(),
       priceSensitivity: b.priceSensitivity || 'Moderate',
       decisionSpeed: b.decisionSpeed || 'Deliberate',
-      brandLoyalty: Number(b.brandLoyalty) || 60,
+      brandLoyalty: b.brandLoyalty !== undefined && b.brandLoyalty !== '' ? Number(b.brandLoyalty) || 0 : 0,
       isBuiltIn: false,
-      isFavorite: false,
-      createdAt: new Date().toISOString(),
+      isFavorite: Boolean(b.isFavorite),
+      createdAt: b.createdAt || new Date().toISOString(),
     };
 
-    db.customPersonas.push(newPersona);
+    const existingIdx = db.customPersonas.findIndex((p) => p.id === newPersona.id);
+    if (existingIdx !== -1) {
+      db.customPersonas[existingIdx] = newPersona;
+    } else {
+      db.customPersonas.push(newPersona);
+    }
     saveDatabase(db);
     res.json({ persona: newPersona });
   });
@@ -1466,12 +1477,12 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     }
 
     const sim = simulationId
-      ? db.simulations.find((s) => s.id === simulationId) || null
-      : null;
+      ? db.simulations.find((s) => s.id === simulationId) || req.body?.simulation || null
+      : req.body?.simulation || null;
     const allPersonas = getAllPersonasForWorkspace(activeWs.id);
     const persona = personaId
-      ? allPersonas.find((p) => p.id === personaId) || null
-      : null;
+      ? allPersonas.find((p) => p.id === personaId) || req.body?.persona || null
+      : req.body?.persona || null;
 
     const userMsgObj = {
       id: `msg-u-${Date.now()}`,

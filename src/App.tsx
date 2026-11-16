@@ -61,6 +61,7 @@ import {
   logRecentSearchToSupabase,
   normalizeConsistentUserName,
   renameWorkspaceInSupabase,
+  restoreBuiltInPersonasInSupabase,
   saveConversationToSupabase,
   saveSimulationToSupabase,
   signOutFromSupabase,
@@ -148,6 +149,55 @@ function mergeSimulationLists(
   return Array.from(map.values()).sort(
     (a, b) => new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime()
   );
+}
+
+function mergePersonaLists(
+  lists: Persona[][],
+  deletedIds: string[],
+  favoriteIds: string[]
+): Persona[] {
+  const deletedSet = new Set(deletedIds);
+  const favSet = new Set(favoriteIds);
+  const map = new Map<string, Persona>();
+
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const p of list) {
+      if (!p || !p.id || deletedSet.has(p.id)) continue;
+      const existing = map.get(p.id);
+      const isFav = Boolean(p.isFavorite) || Boolean(existing?.isFavorite) || favSet.has(p.id);
+      if (!existing) {
+        map.set(p.id, { ...p, isFavorite: isFav });
+      } else {
+        // Prefer richer custom/persisted definitions while preserving favorite status
+        map.set(p.id, {
+          ...existing,
+          ...p,
+          tags: p.tags?.length ? p.tags : existing.tags || [],
+          characteristics: p.characteristics?.length
+            ? p.characteristics
+            : existing.characteristics || [],
+          preferences: p.preferences?.length ? p.preferences : existing.preferences || [],
+          motivations: p.motivations?.length ? p.motivations : existing.motivations || [],
+          decisionFactors: p.decisionFactors?.length
+            ? p.decisionFactors
+            : existing.decisionFactors || [],
+          concerns: p.concerns?.length ? p.concerns : existing.concerns || [],
+          isFavorite: isFav,
+        });
+      }
+    }
+  }
+
+  const all = Array.from(map.values());
+  const builtIns = all.filter((p) => p.isBuiltIn);
+  const customs = all
+    .filter((p) => !p.isBuiltIn)
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+  return [...builtIns, ...customs];
 }
 
 type AppView = 'landing' | 'auth' | 'workspace';
@@ -249,12 +299,24 @@ export default function App() {
         const userKey = session?.user?.id || user?.id || 'default';
         const deletedSimIds = loadLocalJson<string[]>(`clemir_deleted_sim_ids_${userKey}`, []);
         const deletedConvIds = loadLocalJson<string[]>(`clemir_deleted_conv_ids_${userKey}`, []);
+        const deletedPersonaIds = loadLocalJson<string[]>(
+          `clemir_deleted_persona_ids_${userKey}`,
+          []
+        );
+        const favPersonaIds = loadLocalJson<string[]>(
+          `clemir_favorite_persona_ids_${userKey}`,
+          []
+        );
         const cachedLocalSims = loadLocalJson<Simulation[]>(
           `clemir_simulations_${userKey}`,
           []
         );
         const cachedLocalConvs = loadLocalJson<AgentConversation[]>(
           `clemir_conversations_${userKey}`,
+          []
+        );
+        const cachedCustomPersonas = loadLocalJson<Persona[]>(
+          `clemir_custom_personas_${userKey}`,
           []
         );
 
@@ -277,7 +339,18 @@ export default function App() {
             );
             setSimulations(mergedSupaSims);
             saveLocalJson(`clemir_simulations_${userKey}`, mergedSupaSims);
-            setPersonas(supaData.personas);
+
+            const mergedSupaPersonas = mergePersonaLists(
+              [BUILT_IN_PERSONAS, supaData.personas || [], cachedCustomPersonas],
+              deletedPersonaIds,
+              favPersonaIds
+            );
+            setPersonas(mergedSupaPersonas);
+            saveLocalJson(
+              `clemir_custom_personas_${userKey}`,
+              mergedSupaPersonas.filter((p) => !p.isBuiltIn)
+            );
+
             setReports(supaData.reports || []);
             setRecentSearches(supaData.recentSearches || []);
           }
@@ -299,6 +372,14 @@ export default function App() {
             `clemir_deleted_conv_ids_${finalUserKey}`,
             deletedConvIds
           );
+          const finalDeletedPersonas = loadLocalJson<string[]>(
+            `clemir_deleted_persona_ids_${finalUserKey}`,
+            deletedPersonaIds
+          );
+          const finalFavPersonas = loadLocalJson<string[]>(
+            `clemir_favorite_persona_ids_${finalUserKey}`,
+            favPersonaIds
+          );
           const finalLocalSims = loadLocalJson<Simulation[]>(
             `clemir_simulations_${finalUserKey}`,
             cachedLocalSims
@@ -306,6 +387,10 @@ export default function App() {
           const finalLocalConvs = loadLocalJson<AgentConversation[]>(
             `clemir_conversations_${finalUserKey}`,
             cachedLocalConvs
+          );
+          const finalCustomPersonas = loadLocalJson<Persona[]>(
+            `clemir_custom_personas_${finalUserKey}`,
+            cachedCustomPersonas
           );
 
           if (data && !data.stateless && data.user) {
@@ -330,9 +415,21 @@ export default function App() {
             setSimulations(mergedSims);
             saveLocalJson(`clemir_simulations_${finalUserKey}`, mergedSims);
 
-            if (Array.isArray(data.personas) && data.personas.length > 0) {
-              setPersonas(data.personas);
-            }
+            const mergedPersonas = mergePersonaLists(
+              [
+                BUILT_IN_PERSONAS,
+                supaData?.personas || [],
+                data.personas || [],
+                finalCustomPersonas,
+              ],
+              finalDeletedPersonas,
+              finalFavPersonas
+            );
+            setPersonas(mergedPersonas);
+            saveLocalJson(
+              `clemir_custom_personas_${finalUserKey}`,
+              mergedPersonas.filter((p) => !p.isBuiltIn)
+            );
 
             const mergedConversations = mergeConversationLists(
               [supaData?.conversations || [], data.conversations || [], finalLocalConvs],
@@ -362,6 +459,24 @@ export default function App() {
               return combined;
             });
 
+            setPersonas((prev) => {
+              const combined = mergePersonaLists(
+                [
+                  BUILT_IN_PERSONAS,
+                  supaData?.personas || [],
+                  finalCustomPersonas,
+                  prev.filter((p) => !p.isBuiltIn),
+                ],
+                finalDeletedPersonas,
+                finalFavPersonas
+              );
+              saveLocalJson(
+                `clemir_custom_personas_${finalUserKey}`,
+                combined.filter((p) => !p.isBuiltIn)
+              );
+              return combined;
+            });
+
             const mergedStatelessConvs = mergeConversationLists(
               [supaData?.conversations || [], finalLocalConvs],
               finalDeletedConvs
@@ -377,6 +492,24 @@ export default function App() {
           setSimulations((prev) => {
             const combined = mergeSimulationLists([mergedFallbackSims, prev], deletedSimIds);
             saveLocalJson(`clemir_simulations_${userKey}`, combined);
+            return combined;
+          });
+
+          setPersonas((prev) => {
+            const combined = mergePersonaLists(
+              [
+                BUILT_IN_PERSONAS,
+                supaData?.personas || [],
+                cachedCustomPersonas,
+                prev.filter((p) => !p.isBuiltIn),
+              ],
+              deletedPersonaIds,
+              favPersonaIds
+            );
+            saveLocalJson(
+              `clemir_custom_personas_${userKey}`,
+              combined.filter((p) => !p.isBuiltIn)
+            );
             return combined;
           });
 
@@ -806,6 +939,100 @@ export default function App() {
       }
     } catch {
       // Cleared cleanly
+    }
+  };
+
+  // Persistent Audience Database Handlers (auto-syncs Custom Personas from Simulation Creator, AI Agent, and Audience Database)
+  const handlePersonaSaved = (savedPersona: Persona) => {
+    if (!savedPersona || !savedPersona.id) return;
+    const userKey = user?.id || 'default';
+    const normalizedPersona: Persona = {
+      ...savedPersona,
+      workspaceId: savedPersona.workspaceId || activeWorkspaceId || 'ws-default',
+      isBuiltIn: false,
+      createdAt: savedPersona.createdAt || new Date().toISOString(),
+    };
+
+    const nextDeleted = loadLocalJson<string[]>(
+      `clemir_deleted_persona_ids_${userKey}`,
+      []
+    ).filter((id) => id !== normalizedPersona.id);
+    saveLocalJson(`clemir_deleted_persona_ids_${userKey}`, nextDeleted);
+
+    const favIds = loadLocalJson<string[]>(`clemir_favorite_persona_ids_${userKey}`, []);
+    const existingCustom = loadLocalJson<Persona[]>(`clemir_custom_personas_${userKey}`, []);
+    const updatedCustom = [
+      normalizedPersona,
+      ...existingCustom.filter((p) => p.id !== normalizedPersona.id),
+    ];
+    saveLocalJson(`clemir_custom_personas_${userKey}`, updatedCustom);
+
+    setPersonas((prev) =>
+      mergePersonaLists([prev, [normalizedPersona]], nextDeleted, favIds)
+    );
+  };
+
+  const handlePersonaDeleted = (personaId: string) => {
+    const userKey = user?.id || 'default';
+    const existingDeleted = loadLocalJson<string[]>(`clemir_deleted_persona_ids_${userKey}`, []);
+    if (!existingDeleted.includes(personaId)) {
+      saveLocalJson(`clemir_deleted_persona_ids_${userKey}`, [...existingDeleted, personaId]);
+    }
+    const existingCustom = loadLocalJson<Persona[]>(`clemir_custom_personas_${userKey}`, []);
+    saveLocalJson(
+      `clemir_custom_personas_${userKey}`,
+      existingCustom.filter((p) => p.id !== personaId)
+    );
+    setPersonas((prev) => prev.filter((p) => p.id !== personaId));
+  };
+
+  const handlePersonaFavorited = (personaId: string) => {
+    const userKey = user?.id || 'default';
+    const favIds = loadLocalJson<string[]>(`clemir_favorite_persona_ids_${userKey}`, []);
+    const nextFavs = favIds.includes(personaId)
+      ? favIds.filter((id) => id !== personaId)
+      : [...favIds, personaId];
+    saveLocalJson(`clemir_favorite_persona_ids_${userKey}`, nextFavs);
+
+    const existingCustom = loadLocalJson<Persona[]>(`clemir_custom_personas_${userKey}`, []);
+    saveLocalJson(
+      `clemir_custom_personas_${userKey}`,
+      existingCustom.map((p) =>
+        p.id === personaId ? { ...p, isFavorite: nextFavs.includes(personaId) } : p
+      )
+    );
+
+    setPersonas((prev) =>
+      prev.map((p) =>
+        p.id === personaId ? { ...p, isFavorite: nextFavs.includes(personaId) } : p
+      )
+    );
+  };
+
+  const handleRestoreBuiltInPersonas = async () => {
+    const userKey = user?.id || 'default';
+    const builtInIds = new Set(BUILT_IN_PERSONAS.map((p) => p.id));
+    const existingDeleted = loadLocalJson<string[]>(`clemir_deleted_persona_ids_${userKey}`, []);
+    const nextDeleted = existingDeleted.filter((id) => !builtInIds.has(id));
+    saveLocalJson(`clemir_deleted_persona_ids_${userKey}`, nextDeleted);
+    const favIds = loadLocalJson<string[]>(`clemir_favorite_persona_ids_${userKey}`, []);
+    const existingCustom = loadLocalJson<Persona[]>(`clemir_custom_personas_${userKey}`, []);
+
+    setPersonas((prev) =>
+      mergePersonaLists([BUILT_IN_PERSONAS, prev, existingCustom], nextDeleted, favIds)
+    );
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        await restoreBuiltInPersonasInSupabase(session.user.id, activeWorkspaceId).catch(
+          () => false
+        );
+      }
+    } catch {
+      // Local restore already applied
     }
   };
 
@@ -1447,6 +1674,7 @@ export default function App() {
                     authToken={authToken}
                     activeWorkspaceId={activeWorkspaceId}
                     onCancel={() => setCreatingSim(false)}
+                    onPersonaSaved={handlePersonaSaved}
                     onPersonasChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                     onOpenAgent={() => setActiveTab('agent')}
                     onSimulationStarted={(newSimId, createdSim) => {
@@ -1631,10 +1859,12 @@ export default function App() {
                 initialSimulationId={agentFocusSimId}
                 initialPersonaId={agentFocusPersonaId}
                 authToken={authToken}
+                activeWorkspaceId={activeWorkspaceId}
                 onConversationsChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                 onConversationUpserted={handleUpsertConversation}
                 onConversationDeleted={handleDeleteConversation}
                 onClearAllConversations={handleClearAllConversations}
+                onPersonaSaved={handlePersonaSaved}
                 onPersonasChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                 onOpenSimulation={handleOpenSimulation}
               />
@@ -1645,6 +1875,11 @@ export default function App() {
               <AudienceDatabase
                 personas={personas}
                 authToken={authToken}
+                activeWorkspaceId={activeWorkspaceId}
+                onPersonaSaved={handlePersonaSaved}
+                onPersonaDeleted={handlePersonaDeleted}
+                onToggleFavorite={handlePersonaFavorited}
+                onRestoreBuiltIns={handleRestoreBuiltInPersonas}
                 onPersonasChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                 onTalkToPersona={(personaId) => {
                   setAgentFocusPersonaId(personaId);

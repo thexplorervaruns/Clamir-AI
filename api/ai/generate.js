@@ -144,7 +144,7 @@ export async function callOpenRouterChat({
 
   const wantJson = Boolean(jsonMode || responseFormatJson);
 
-  const attemptModelCall = async (targetModel, includeResponseFormat) => {
+  const attemptModelCall = async (targetModel, includeResponseFormat, timeoutMs = 15000) => {
     const requestBody = {
       model: targetModel,
       messages: finalMessages,
@@ -156,7 +156,7 @@ export async function callOpenRouterChat({
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 22000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(OPENROUTER_ENDPOINT, {
@@ -165,7 +165,7 @@ export async function callOpenRouterChat({
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+          "HTTP-Referer": process.env.APP_URL || "https://clemir.ai",
           "X-Title": "Clemir AI Personal Assistant & Simulation Studio",
         },
         body: JSON.stringify(requestBody),
@@ -180,16 +180,30 @@ export async function callOpenRouterChat({
     }
   };
 
-  // 1. Primary attempt with google/gemini-2.5-flash
-  let { response, data } = await attemptModelCall(model, wantJson);
+  // 1. Primary attempt with google/gemini-2.5-flash (catch network/timeout so free fallback can still try)
+  let response = null;
+  let data = {};
+  try {
+    const primaryRes = await attemptModelCall(model, wantJson, 15000);
+    response = primaryRes.response;
+    data = primaryRes.data;
+  } catch (primaryErr) {
+    if (model === FALLBACK_FREE_MODEL) {
+      throw primaryErr;
+    }
+  }
 
-  // 2. If account has no paid credits (402) or model is rate-limited/unavailable, fall back to openrouter/free
-  if (!response.ok && model !== FALLBACK_FREE_MODEL) {
-    const retryRes = await attemptModelCall(FALLBACK_FREE_MODEL, false).catch(() => null);
-    if (retryRes && retryRes.response.ok) {
+  // 2. If primary failed, timed out, or returned error, fall back to openrouter/free
+  if ((!response || !response.ok) && model !== FALLBACK_FREE_MODEL) {
+    const retryRes = await attemptModelCall(FALLBACK_FREE_MODEL, false, 11000).catch(() => null);
+    if (retryRes && retryRes.response && retryRes.response.ok) {
       response = retryRes.response;
       data = retryRes.data;
     }
+  }
+
+  if (!response) {
+    throw new Error("Unable to reach OpenRouter API within timeout window.");
   }
 
   if (!response.ok) {
@@ -544,6 +558,7 @@ export async function generateSmartAssistantResponse({
         contextItems.map((c, idx) => `[Context ${idx + 1}: ${c.title}]\n${c.content}`).join("\n\n")
       : "";
 
+  const simForecast = simulation?.results?.timesfmForecast;
   const simSummary = simulation
     ? [
         `Selected Simulation Context (use when relevant to the user's message):`,
@@ -551,13 +566,16 @@ export async function generateSmartAssistantResponse({
         `- Description: ${simulation.description || "N/A"}`,
         `- Hypothesis: ${simulation.hypothesis || "N/A"}`,
         `- Target Audience: ${simulation.targetAudience || "N/A"}`,
-        simulation.results
+        simulation.results?.executiveSummary?.mainFinding
           ? `- Main Finding: ${simulation.results.executiveSummary.mainFinding}`
-          : `- Status: ${simulation.status} (${simulation.stage})`,
+          : `- Status: ${simulation.status || "Completed"} (${simulation.stage || "Completed"})`,
         simulation.results?.personaBreakdown?.length
           ? `- Persona Scores: ${simulation.results.personaBreakdown
               .map((p) => `${p.personaName}: ${p.acceptanceScore}/100 (${p.mainTakeaway})`)
               .join(" | ")}`
+          : "",
+        simForecast?.summaryStats
+          ? `- Embedded TimesFM Forecast: Series="${simForecast.seriesName}", Last=${simForecast.summaryStats.lastValue}, Projected End P50=${simForecast.summaryStats.projectedEndP50} (${simForecast.summaryStats.projectedChangePct}%), Backtest MAPE=${simForecast.backtest?.mape ?? "N/A"}%`
           : "",
       ]
         .filter(Boolean)
@@ -567,12 +585,19 @@ export async function generateSmartAssistantResponse({
   const personaSummary = persona
     ? [
         `Selected Target Audience Persona (adopt or analyze this perspective when relevant):`,
-        `- Name: ${persona.name} (${persona.segment})`,
-        `- Tagline: ${persona.tagline}`,
-        `- Price Sensitivity: ${persona.priceSensitivity}, Decision Speed: ${persona.decisionSpeed}, Brand Loyalty: ${persona.brandLoyalty}/100`,
-        `- Decision Factors: ${(persona.decisionFactors || []).join("; ")}`,
-        `- Main Concerns: ${(persona.concerns || []).join("; ")}`,
-      ].join("\n")
+        `- Name: ${persona.name} (${persona.segment || "Custom Segment"})`,
+        `- Tagline: ${persona.tagline || persona.description || "Custom target audience"}`,
+        `- Price Sensitivity: ${persona.priceSensitivity || "Moderate"}, Decision Speed: ${persona.decisionSpeed || "Deliberate"}, Brand Loyalty: ${persona.brandLoyalty ?? 60}/100`,
+        persona.context ? `- Context: ${persona.context}` : "",
+        Array.isArray(persona.decisionFactors) && persona.decisionFactors.length > 0
+          ? `- Decision Factors: ${persona.decisionFactors.join("; ")}`
+          : "",
+        Array.isArray(persona.concerns) && persona.concerns.length > 0
+          ? `- Main Concerns: ${persona.concerns.join("; ")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
     : "";
 
   const webContext =
@@ -581,7 +606,7 @@ export async function generateSmartAssistantResponse({
         webSources
           .map(
             (s, i) =>
-              `[${i + 1}] ${s.title} (${s.url}): ${(
+              `[${i + 1}] ${s.title} (${s.url || s.uri || ""}): ${(
                 s.excerpt ||
                 s.snippet ||
                 s.content ||
@@ -609,6 +634,7 @@ export async function generateSmartAssistantResponse({
     .join("\n\n");
 
   // Build multi-turn message history (last 14 messages for deep context continuity)
+  const cleanUserMsg = String(userMessage || "").trim() || "Hello";
   const recentHistory = Array.isArray(history)
     ? history
         .slice(-14)
@@ -622,9 +648,9 @@ export async function generateSmartAssistantResponse({
   // Ensure the latest user message is at the end
   if (
     recentHistory.length === 0 ||
-    recentHistory[recentHistory.length - 1].content !== userMessage
+    recentHistory[recentHistory.length - 1].content !== cleanUserMsg
   ) {
-    recentHistory.push({ role: "user", content: userMessage });
+    recentHistory.push({ role: "user", content: cleanUserMsg });
   }
 
   try {
@@ -646,15 +672,17 @@ export async function generateSmartAssistantResponse({
     console.warn("OpenRouter assistant fallback activated:", err instanceof Error ? err.message : err);
   }
 
-  const fallbackReply = buildContextualAssistantFallback({
-    userMessage,
-    history: recentHistory,
-    simulation,
-    persona,
-    webSources,
-    customNote,
-    additionalContexts,
-  });
+  const fallbackReply =
+    buildContextualAssistantFallback({
+      userMessage: cleanUserMsg,
+      history: recentHistory,
+      simulation,
+      persona,
+      webSources,
+      customNote,
+      additionalContexts,
+    }) ||
+    `I received your message about "${cleanUserMsg}". Tell me a bit more about your goal, options, or context and we can work through it together.`;
 
   return {
     reply: fallbackReply,
@@ -662,10 +690,23 @@ export async function generateSmartAssistantResponse({
   };
 }
 
+function parseHttpBody(req) {
+  if (!req || req.body === undefined || req.body === null) return {};
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return req.body;
+}
+
 /**
  * Express / Serverless HTTP handler for POST /api/ai/generate
  */
 export async function handleAiGenerateRequest(req, res) {
+  const body = parseHttpBody(req);
   try {
     const {
       prompt,
@@ -677,9 +718,39 @@ export async function handleAiGenerateRequest(req, res) {
       responseFormatJson,
       additionalContexts,
       customNote,
-    } = req.body || {};
+      simulation,
+      persona,
+      webSources,
+    } = body;
 
     const wantJson = Boolean(jsonMode || responseFormatJson);
+
+    // If non-JSON conversational call passes structured context or standard messages, use smart assistant path
+    if (!wantJson && (simulation || persona || Array.isArray(webSources))) {
+      const lastUserText =
+        prompt ||
+        (Array.isArray(messages)
+          ? [...messages].reverse().find((m) => m && m.role === "user" && m.content)?.content
+          : "") ||
+        "";
+      const smart = await generateSmartAssistantResponse({
+        userMessage: String(lastUserText || "Help me analyze this."),
+        history: Array.isArray(messages) ? messages : [],
+        simulation: simulation || null,
+        persona: persona || null,
+        webSources: Array.isArray(webSources) ? webSources : [],
+        customNote: customNote || "",
+        additionalContexts: Array.isArray(additionalContexts) ? additionalContexts : [],
+      });
+      res.json({
+        ok: true,
+        result: smart.reply,
+        content: smart.reply,
+        model: smart.model,
+      });
+      return;
+    }
+
     const contextItems = normalizeAdditionalContexts({ customNote, additionalContexts });
     const mergedSystem = [
       systemInstruction || systemPrompt || "",
@@ -700,6 +771,10 @@ export async function handleAiGenerateRequest(req, res) {
       cleanText: !wantJson,
     });
 
+    if (!wantJson && (!completion.content || !completion.content.trim())) {
+      throw new Error("Empty assistant output.");
+    }
+
     res.json({
       ok: true,
       result: completion.content,
@@ -709,8 +784,17 @@ export async function handleAiGenerateRequest(req, res) {
     });
   } catch (err) {
     // Even if OpenRouter returns an error on /api/ai/generate, provide a helpful response when non-JSON
-    const { prompt, messages, jsonMode, responseFormatJson, additionalContexts, customNote } =
-      req.body || {};
+    const {
+      prompt,
+      messages,
+      jsonMode,
+      responseFormatJson,
+      additionalContexts,
+      customNote,
+      simulation,
+      persona,
+      webSources,
+    } = body;
     if (!jsonMode && !responseFormatJson) {
       const lastMsg =
         prompt ||
@@ -721,6 +805,9 @@ export async function handleAiGenerateRequest(req, res) {
         const fallback = buildContextualAssistantFallback({
           userMessage: String(lastMsg),
           history: Array.isArray(messages) ? messages : [],
+          simulation: simulation || null,
+          persona: persona || null,
+          webSources: Array.isArray(webSources) ? webSources : [],
           additionalContexts: Array.isArray(additionalContexts) ? additionalContexts : [],
           customNote: customNote || "",
         });

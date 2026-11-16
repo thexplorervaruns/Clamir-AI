@@ -44,6 +44,7 @@ interface SimulationCreatorProps {
   activeWorkspaceId?: string;
   onCancel: () => void;
   onSimulationStarted: (simulationId: string, createdSimulation?: Simulation) => void;
+  onPersonaSaved?: (persona: Persona) => void;
   onPersonasChanged?: () => void;
   onOpenAgent?: () => void;
 }
@@ -68,6 +69,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   activeWorkspaceId = 'ws-default',
   onCancel,
   onSimulationStarted,
+  onPersonaSaved,
   onPersonasChanged,
   onOpenAgent,
 }) => {
@@ -183,9 +185,9 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         segment: cleanSegment || 'Custom Segment',
         tagline: cleanTagline,
         description: cleanTagline,
-        avatarCode: cleanName.slice(0, 2).toUpperCase(),
-        tags: cleanSegment ? [cleanSegment] : [],
-        characteristics: [],
+        avatarCode: (cleanName.slice(0, 2) || 'CP').toUpperCase(),
+        tags: cleanSegment ? [cleanSegment, 'Custom Audience'] : ['Custom Audience'],
+        characteristics: cleanTagline ? [cleanTagline] : [],
         preferences: [],
         motivations: [],
         purchasingBehavior: '',
@@ -201,9 +203,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         data: { session },
       } = await supabase.auth.getSession();
 
-      let savedId = `custom-aud-${Date.now()}`;
-      let savedName = cleanName;
-
+      let supaSavedPersona: Persona | null = null;
       if (session?.user) {
         const supaSaved = await savePersonaToSupabase(
           session.user.id,
@@ -211,8 +211,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           personaDraft
         ).catch(() => null);
         if (supaSaved?.id) {
-          savedId = supaSaved.id;
-          savedName = supaSaved.name;
+          supaSavedPersona = supaSaved as Persona;
         }
       }
 
@@ -222,29 +221,88 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           'Content-Type': 'application/json',
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({ ...personaDraft, workspaceId: activeWorkspaceId }),
+        body: JSON.stringify({
+          ...personaDraft,
+          ...(supaSavedPersona?.id ? { id: supaSavedPersona.id } : {}),
+          workspaceId: activeWorkspaceId,
+        }),
       }).catch(() => null);
 
+      let apiSavedPersona: Persona | null = null;
       if (res && res.ok) {
         const { data } = await readJsonSafe(res);
-        if (data?.persona?.id && savedId.startsWith('custom-aud-')) {
-          savedId = data.persona.id;
-          savedName = data.persona.name || cleanName;
+        if (data?.persona?.id) {
+          apiSavedPersona = data.persona as Persona;
         }
       }
 
-      if (onPersonasChanged) onPersonasChanged();
+      const finalPersona: Persona = {
+        id: supaSavedPersona?.id || apiSavedPersona?.id || `persona-custom-${Date.now()}`,
+        workspaceId:
+          supaSavedPersona?.workspaceId ||
+          apiSavedPersona?.workspaceId ||
+          activeWorkspaceId ||
+          'ws-default',
+        name: supaSavedPersona?.name || apiSavedPersona?.name || cleanName,
+        tagline: supaSavedPersona?.tagline ?? apiSavedPersona?.tagline ?? cleanTagline,
+        description:
+          supaSavedPersona?.description ?? apiSavedPersona?.description ?? cleanTagline,
+        avatarCode:
+          supaSavedPersona?.avatarCode ||
+          apiSavedPersona?.avatarCode ||
+          personaDraft.avatarCode,
+        segment: supaSavedPersona?.segment || apiSavedPersona?.segment || personaDraft.segment,
+        tags:
+          supaSavedPersona?.tags?.length
+            ? supaSavedPersona.tags
+            : apiSavedPersona?.tags?.length
+            ? apiSavedPersona.tags
+            : personaDraft.tags,
+        characteristics:
+          supaSavedPersona?.characteristics?.length
+            ? supaSavedPersona.characteristics
+            : personaDraft.characteristics,
+        preferences: supaSavedPersona?.preferences || apiSavedPersona?.preferences || [],
+        motivations: supaSavedPersona?.motivations || apiSavedPersona?.motivations || [],
+        purchasingBehavior:
+          supaSavedPersona?.purchasingBehavior || apiSavedPersona?.purchasingBehavior || '',
+        decisionFactors:
+          supaSavedPersona?.decisionFactors || apiSavedPersona?.decisionFactors || [],
+        concerns: supaSavedPersona?.concerns || apiSavedPersona?.concerns || [],
+        context: supaSavedPersona?.context ?? apiSavedPersona?.context ?? cleanContext,
+        priceSensitivity:
+          supaSavedPersona?.priceSensitivity || customPriceSensitivity,
+        decisionSpeed: supaSavedPersona?.decisionSpeed || customDecisionSpeed,
+        brandLoyalty:
+          typeof supaSavedPersona?.brandLoyalty === 'number'
+            ? supaSavedPersona.brandLoyalty
+            : parsedLoyalty,
+        isBuiltIn: false,
+        isFavorite: false,
+        createdAt:
+          supaSavedPersona?.createdAt ||
+          apiSavedPersona?.createdAt ||
+          new Date().toISOString(),
+      };
+
+      if (onPersonaSaved) {
+        onPersonaSaved(finalPersona);
+      }
+      if (onPersonasChanged) {
+        onPersonasChanged();
+      }
+
       setSelectedPersonas((prev) => [
-        ...prev.filter((p) => p.personaId !== savedId),
+        ...prev.filter((p) => p.personaId !== finalPersona.id),
         {
-          personaId: savedId,
-          personaName: savedName,
+          personaId: finalPersona.id,
+          personaName: finalPersona.name,
           agentCount: parsedAgents,
         },
       ]);
       setAgentCountInputs((prev) => ({
         ...prev,
-        [savedId]: customAgentCount.trim(),
+        [finalPersona.id]: customAgentCount.trim() || String(parsedAgents),
       }));
 
       setCustomPersonaName('');
@@ -2014,7 +2072,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   Create Custom Target Audience
                 </h3>
                 <p className="text-xs text-[#6B7280]">
-                  Define any custom audience segment and add it directly to this simulation and your workspace.
+                  Define a custom audience segment. It will be added to this simulation and saved automatically in your Audience Database.
                 </p>
               </div>
               <button

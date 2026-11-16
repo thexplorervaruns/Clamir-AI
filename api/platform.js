@@ -319,30 +319,49 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       });
     }
 
-    // 8. Stateless Agent Message Endpoint (if direct route hits /api/agent/message)
+    // 8. Stateless Agent Message Endpoint (Vercel Serverless-Compatible)
     if (route === "/agent/message" && method === "POST") {
       const message = String(body.message || "").trim();
       if (!message) {
         return res.status(400).json({ error: "Message is required." });
       }
       let sources = [];
-      let searchNote = "";
+      let rawWebSources = [];
       if (body.webSearch) {
-        const sr = await performRealTimeWebResearch({ queries: [message] }).catch(() => null);
+        const sr = await performRealTimeWebResearch({
+          queries: [message],
+          maxResultsPerQuery: 5,
+        }).catch(() => null);
         if (sr && Array.isArray(sr.sources)) {
+          rawWebSources = sr.sources;
           sources = sr.sources.map((s) => ({ title: s.title || s.url, uri: s.url }));
-          searchNote = sr.sources
-            .map((s, i) => `[${i + 1}] ${s.title} (${s.url}): ${s.excerpt || ""}`)
-            .join("\n");
         }
       }
+
+      const clientHistory = Array.isArray(body.history)
+        ? body.history
+            .filter((m) => m && m.content)
+            .map((m, idx) => ({
+              id: m.id || `msg-hist-${idx}`,
+              role: m.role === "assistant" ? "assistant" : "user",
+              content: String(m.content),
+              timestamp: m.timestamp || new Date().toISOString(),
+              webSearchUsed: Boolean(m.webSearchUsed),
+              sources: Array.isArray(m.sources) ? m.sources : undefined,
+            }))
+        : [];
+
       const aiReply = await generateSmartAssistantResponse({
-        message,
-        history: Array.isArray(body.history) ? body.history : [],
+        userMessage: message,
+        history: clientHistory,
+        simulation: body.simulation || null,
+        persona: body.persona || null,
+        webSources: rawWebSources,
+        customNote: String(body.customContextNote || "").trim(),
         additionalContexts: Array.isArray(body.additionalContexts) ? body.additionalContexts : [],
-        customNote: body.customContextNote || "",
-        systemPrompt: searchNote ? `Live Web Sources:\n${searchNote}` : undefined,
       });
+
+      const replyContent = cleanNaturalAssistantText(aiReply?.reply || "");
 
       const userMsg = {
         id: `msg-u-${Date.now()}`,
@@ -353,34 +372,42 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       const assistantMsg = {
         id: `msg-a-${Date.now() + 1}`,
         role: "assistant",
-        content: cleanNaturalAssistantText(aiReply.content || aiReply.result || ""),
+        content:
+          replyContent ||
+          `I received your message about "${message}". Feel free to add any extra details or toggle Web Search for live web findings.`,
         timestamp: new Date().toISOString(),
         webSearchUsed: Boolean(body.webSearch),
         sources,
       };
       const conv = {
         id: body.conversationId || crypto.randomUUID(),
-        workspaceId: "ws-default",
+        workspaceId: String(body.workspaceId || "ws-default"),
         title: message.slice(0, 48),
         simulationId: body.simulationId || null,
         personaId: body.personaId || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        messages: [...(Array.isArray(body.history) ? body.history : []), userMsg, assistantMsg],
+        messages: [...clientHistory, userMsg, assistantMsg],
       };
-      return res.status(200).json({ conversation: conv });
+      return res.status(200).json({
+        conversation: conv,
+        model: aiReply?.model || "clemir-contextual-assistant",
+      });
     }
 
-    // 9. Personas CRUD / Safe Stateless Ack for Supabase-backed Workspace Routes
+    // 9. Personas CRUD / Safe Stateless Ack for Supabase & Local-Cached Workspace Routes
     if (route === "/personas" && method === "POST") {
+      const cleanName = String(body.name || "Custom Persona").trim();
       return res.status(200).json({
         persona: {
-          id: `persona-custom-${Date.now()}`,
+          id: body.id || `persona-custom-${Date.now()}`,
           workspaceId: String(body.workspaceId || "ws-default"),
-          name: String(body.name || "Custom Persona").trim(),
+          name: cleanName,
           tagline: String(body.tagline || "").trim(),
           description: String(body.description || "").trim(),
-          avatarCode: String(body.avatarCode || "CP").slice(0, 3).toUpperCase(),
+          avatarCode: String(body.avatarCode || cleanName.slice(0, 2) || "CP")
+            .slice(0, 3)
+            .toUpperCase(),
           segment: String(body.segment || "Custom Segment").trim(),
           tags: Array.isArray(body.tags) ? body.tags : [],
           characteristics: Array.isArray(body.characteristics) ? body.characteristics : [],
@@ -392,12 +419,76 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
           context: String(body.context || "").trim(),
           priceSensitivity: body.priceSensitivity || "Moderate",
           decisionSpeed: body.decisionSpeed || "Deliberate",
-          brandLoyalty: Number(body.brandLoyalty) || 60,
+          brandLoyalty: Number(body.brandLoyalty) || 0,
           isBuiltIn: false,
           isFavorite: false,
           createdAt: new Date().toISOString(),
         },
       });
+    }
+
+    const personaDupMatch = route.match(/^\/personas\/([^/]+)\/duplicate$/);
+    if (personaDupMatch && method === "POST") {
+      const source = body.sourcePersona || {};
+      const baseName = String(source.name || "Audience Persona").trim();
+      return res.status(200).json({
+        persona: {
+          ...source,
+          id: `persona-custom-${Date.now()}`,
+          workspaceId: String(source.workspaceId || body.workspaceId || "ws-default"),
+          name: `${baseName} (Copy)`,
+          isBuiltIn: false,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    const personaFavMatch = route.match(/^\/personas\/([^/]+)\/favorite$/);
+    if (personaFavMatch && method === "POST") {
+      return res.status(200).json({ ok: true, stateless: true });
+    }
+
+    if (route === "/personas/builtin/restore" && method === "POST") {
+      return res.status(200).json({ ok: true, stateless: true });
+    }
+
+    const personaIdMatch = route.match(/^\/personas\/([^/]+)$/);
+    if (personaIdMatch && method === "PUT") {
+      const targetId = personaIdMatch[1];
+      const isBuiltInSource =
+        targetId.startsWith("persona-") && !targetId.startsWith("persona-custom-");
+      const cleanName = String(body.name || "Custom Persona").trim();
+      return res.status(200).json({
+        persona: {
+          id: isBuiltInSource ? `persona-custom-${Date.now()}` : targetId,
+          workspaceId: String(body.workspaceId || "ws-default"),
+          name: cleanName,
+          tagline: String(body.tagline || "").trim(),
+          description: String(body.description || "").trim(),
+          avatarCode: String(body.avatarCode || cleanName.slice(0, 2) || "CP")
+            .slice(0, 3)
+            .toUpperCase(),
+          segment: String(body.segment || "Custom Segment").trim(),
+          tags: Array.isArray(body.tags) ? body.tags : [],
+          characteristics: Array.isArray(body.characteristics) ? body.characteristics : [],
+          preferences: Array.isArray(body.preferences) ? body.preferences : [],
+          motivations: Array.isArray(body.motivations) ? body.motivations : [],
+          purchasingBehavior: String(body.purchasingBehavior || "").trim(),
+          decisionFactors: Array.isArray(body.decisionFactors) ? body.decisionFactors : [],
+          concerns: Array.isArray(body.concerns) ? body.concerns : [],
+          context: String(body.context || "").trim(),
+          priceSensitivity: body.priceSensitivity || "Moderate",
+          decisionSpeed: body.decisionSpeed || "Deliberate",
+          brandLoyalty: Number(body.brandLoyalty) || 0,
+          isBuiltIn: false,
+          isFavorite: Boolean(body.isFavorite),
+          createdAt: body.createdAt || new Date().toISOString(),
+        },
+      });
+    }
+
+    if (personaIdMatch && method === "DELETE") {
+      return res.status(200).json({ ok: true, stateless: true });
     }
 
     // Return clean JSON acknowledgment for auxiliary stateless workspace/account requests

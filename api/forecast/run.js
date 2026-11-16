@@ -1096,12 +1096,24 @@ export async function executeEmbeddedTimesFMForecast({
   };
 }
 
+function parseForecastBody(req) {
+  if (!req || req.body === undefined || req.body === null) return {};
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  return req.body;
+}
+
 /**
  * Express route handler for POST /api/forecast/run
  */
 export async function handleForecastRunRequest(req, res) {
   try {
-    const body = req.body || {};
+    const body = parseForecastBody(req);
     const seriesName = String(body.seriesName || "Time Series Metric").trim() || "Time Series Metric";
     const unitLabel = String(body.unitLabel || "").trim();
     const domainContext = String(body.domainContext || "").trim();

@@ -74,6 +74,11 @@ export declare function deletePersonaInSupabase(
   personaId: string
 ): Promise<boolean>;
 
+export declare function restoreBuiltInPersonasInSupabase(
+  userId: string,
+  workspaceId: string
+): Promise<boolean>;
+
 export declare function saveSimulationToSupabase(
   userId: string,
   workspaceId: string,

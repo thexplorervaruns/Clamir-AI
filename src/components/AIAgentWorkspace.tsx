@@ -41,12 +41,54 @@ interface AIAgentWorkspaceProps {
   initialSimulationId?: string | null;
   initialPersonaId?: string | null;
   authToken: string;
+  activeWorkspaceId?: string;
   onConversationsChanged: () => void;
   onConversationUpserted?: (conv: AgentConversation) => void;
   onConversationDeleted?: (conversationId: string) => void;
   onClearAllConversations?: () => void;
+  onPersonaSaved?: (persona: Persona) => void;
   onPersonasChanged?: () => void;
   onOpenSimulation: (simulationId: string) => void;
+}
+
+async function readJsonSafe(res: Response): Promise<{ ok: boolean; data: any }> {
+  try {
+    const text = await res.text();
+    if (!text) return { ok: res.ok, data: {} };
+    return { ok: res.ok, data: JSON.parse(text) };
+  } catch {
+    return { ok: false, data: null };
+  }
+}
+
+function buildCompactSimulationContext(sim: Simulation | null) {
+  if (!sim) return null;
+  return {
+    id: sim.id,
+    name: sim.name,
+    type: sim.type,
+    description: sim.description,
+    hypothesis: sim.hypothesis,
+    targetAudience: sim.targetAudience,
+    status: sim.status,
+    stage: sim.stage,
+    results: sim.results
+      ? {
+          executiveSummary: sim.results.executiveSummary,
+          sentimentOverview: sim.results.sentimentOverview,
+          personaBreakdown: (sim.results.personaBreakdown || []).slice(0, 8),
+          objectionsAndConcerns: (sim.results.objectionsAndConcerns || []).slice(0, 5),
+          recommendations: (sim.results.recommendations || []).slice(0, 5),
+          timesfmForecast: sim.results.timesfmForecast
+            ? {
+                seriesName: sim.results.timesfmForecast.seriesName,
+                summaryStats: sim.results.timesfmForecast.summaryStats,
+                backtest: sim.results.timesfmForecast.backtest,
+              }
+            : undefined,
+        }
+      : undefined,
+  };
 }
 
 const STARTER_PROMPTS = [
@@ -92,10 +134,12 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   initialSimulationId = null,
   initialPersonaId = null,
   authToken,
+  activeWorkspaceId = 'ws-default',
   onConversationsChanged,
   onConversationUpserted,
   onConversationDeleted,
   onClearAllConversations,
+  onPersonaSaved,
   onPersonasChanged,
   onOpenSimulation,
 }) => {
@@ -173,50 +217,117 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
   const handleCreateCustomAudienceForAgent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAudienceName.trim()) return;
+    const cleanName = newAudienceName.trim();
+    if (!cleanName) return;
     try {
       const { session, token } = await getFreshToken();
       const combinedContext = serializeAdditionalContexts(additionalContexts);
+      const cleanSegment = newAudienceSegment.trim() || 'Custom Defined Audience';
+      const cleanDesc = newAudienceDescription.trim();
+
+      const draft = {
+        name: cleanName,
+        segment: cleanSegment,
+        tagline: cleanDesc,
+        description: cleanDesc,
+        avatarCode: (cleanName.slice(0, 2) || 'CP').toUpperCase(),
+        tags: ['Custom Audience', cleanSegment],
+        characteristics: cleanDesc ? [cleanDesc] : [],
+        preferences: [],
+        motivations: [],
+        purchasingBehavior: '',
+        decisionFactors: [],
+        concerns: [],
+        context:
+          combinedContext ||
+          (cleanDesc ? cleanDesc : `Target audience segment: ${cleanSegment}.`),
+        priceSensitivity: 'Moderate' as const,
+        decisionSpeed: 'Deliberate' as const,
+        brandLoyalty: 0,
+      };
+
+      let supaSavedPersona: Persona | null = null;
+      if (session?.user) {
+        const supaRes = await savePersonaToSupabase(
+          session.user.id,
+          activeWorkspaceId || 'ws-default',
+          draft
+        ).catch(() => null);
+        if (supaRes?.id) {
+          supaSavedPersona = supaRes as Persona;
+        }
+      }
+
       const res = await fetch('/api/personas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          name: newAudienceName.trim(),
-          segment: newAudienceSegment.trim() || 'Custom Defined Audience',
-          tagline:
-            newAudienceDescription.trim() ||
-            'Custom target audience defined inside the AI Assistant.',
-          description:
-            newAudienceDescription.trim() ||
-            'Custom target audience defined inside the AI Assistant.',
-          avatarCode: newAudienceName.trim().slice(0, 2).toUpperCase(),
-          tags: ['Custom Audience', newAudienceSegment.trim() || 'Target Segment'],
-          context:
-            combinedContext ||
-            `Evaluates solutions within ${newAudienceSegment.trim() || 'custom market context'}.`,
+          ...draft,
+          ...(supaSavedPersona?.id ? { id: supaSavedPersona.id } : {}),
+          workspaceId: activeWorkspaceId || 'ws-default',
         }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (session?.user && data.persona) {
-          await savePersonaToSupabase(
-            session.user.id,
-            data.persona.workspaceId || 'ws-default',
-            data.persona
-          ).catch(() => null);
+      }).catch(() => null);
+
+      let apiPersona: Persona | null = null;
+      if (res && res.ok) {
+        const parsed = await readJsonSafe(res);
+        if (parsed.data?.persona?.id) {
+          apiPersona = parsed.data.persona as Persona;
         }
-        if (onPersonasChanged) onPersonasChanged();
-        if (data.persona?.id) {
-          setSelectedPersonaId(data.persona.id);
-        }
-        setNewAudienceName('');
-        setNewAudienceSegment('');
-        setNewAudienceDescription('');
-        setShowCreateCustomAudience(false);
       }
+
+      const finalPersona: Persona = {
+        id: supaSavedPersona?.id || apiPersona?.id || `persona-custom-${Date.now()}`,
+        workspaceId:
+          supaSavedPersona?.workspaceId ||
+          apiPersona?.workspaceId ||
+          activeWorkspaceId ||
+          'ws-default',
+        name: supaSavedPersona?.name || apiPersona?.name || cleanName,
+        tagline: supaSavedPersona?.tagline ?? apiPersona?.tagline ?? cleanDesc,
+        description: supaSavedPersona?.description ?? apiPersona?.description ?? cleanDesc,
+        avatarCode: supaSavedPersona?.avatarCode || apiPersona?.avatarCode || draft.avatarCode,
+        segment: supaSavedPersona?.segment || apiPersona?.segment || cleanSegment,
+        tags:
+          supaSavedPersona?.tags?.length
+            ? supaSavedPersona.tags
+            : apiPersona?.tags?.length
+            ? apiPersona.tags
+            : draft.tags,
+        characteristics:
+          supaSavedPersona?.characteristics?.length
+            ? supaSavedPersona.characteristics
+            : draft.characteristics,
+        preferences: supaSavedPersona?.preferences || apiPersona?.preferences || [],
+        motivations: supaSavedPersona?.motivations || apiPersona?.motivations || [],
+        purchasingBehavior:
+          supaSavedPersona?.purchasingBehavior || apiPersona?.purchasingBehavior || '',
+        decisionFactors:
+          supaSavedPersona?.decisionFactors || apiPersona?.decisionFactors || [],
+        concerns: supaSavedPersona?.concerns || apiPersona?.concerns || [],
+        context: supaSavedPersona?.context ?? apiPersona?.context ?? draft.context,
+        priceSensitivity: supaSavedPersona?.priceSensitivity || 'Moderate',
+        decisionSpeed: supaSavedPersona?.decisionSpeed || 'Deliberate',
+        brandLoyalty:
+          typeof supaSavedPersona?.brandLoyalty === 'number'
+            ? supaSavedPersona.brandLoyalty
+            : 0,
+        isBuiltIn: false,
+        isFavorite: false,
+        createdAt:
+          supaSavedPersona?.createdAt || apiPersona?.createdAt || new Date().toISOString(),
+      };
+
+      if (onPersonaSaved) onPersonaSaved(finalPersona);
+      if (onPersonasChanged) onPersonasChanged();
+      setSelectedPersonaId(finalPersona.id);
+      setNewAudienceName('');
+      setNewAudienceSegment('');
+      setNewAudienceDescription('');
+      setShowCreateCustomAudience(false);
     } catch {
       setErrorMsg('Unable to save custom audience. Please check your connection.');
     }
@@ -289,6 +400,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           content: c.content.trim(),
         }));
       const combinedNote = serializeAdditionalContexts(additionalContexts);
+      const compactSim = buildCompactSimulationContext(activeSimulation);
 
       const res = await fetch('/api/agent/message', {
         method: 'POST',
@@ -297,47 +409,54 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
+          workspaceId: activeWorkspaceId || 'ws-default',
           conversationId: activeConv?.id || null,
           simulationId: selectedSimId || null,
           personaId: selectedPersonaId || null,
+          simulation: compactSim,
+          persona: activePersona || null,
           message: rawText,
           customContextNote: combinedNote || undefined,
           additionalContexts: cleanedContexts,
           history: priorHistory,
           webSearch: webSearchEnabled,
         }),
-      });
+      }).catch(() => null);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.conversation) {
-          const sanitizedConv: AgentConversation = {
-            ...data.conversation,
-            messages: Array.isArray(data.conversation.messages)
-              ? data.conversation.messages.map((m: AgentMessage) =>
-                  m.role === 'assistant' ? { ...m, content: cleanAiResponseText(m.content) } : m
-                )
-              : [],
-          };
-          setOptimisticMessages(sanitizedConv.messages);
-          setActiveConvId(sanitizedConv.id);
-          if (onConversationUpserted) {
-            await onConversationUpserted(sanitizedConv);
-          } else if (session?.user) {
-            await saveConversationToSupabase(
-              session.user.id,
-              sanitizedConv.workspaceId,
-              sanitizedConv
-            ).catch(() => null);
-            onConversationsChanged();
-          } else {
-            onConversationsChanged();
+      if (res && res.ok) {
+        const { data } = await readJsonSafe(res);
+        if (data?.conversation && Array.isArray(data.conversation.messages)) {
+          const sanitizedMsgs: AgentMessage[] = data.conversation.messages.map(
+            (m: AgentMessage) =>
+              m.role === 'assistant' ? { ...m, content: cleanAiResponseText(m.content) } : m
+          );
+          const lastMsg = sanitizedMsgs[sanitizedMsgs.length - 1];
+          // Guard against empty assistant replies (falls through to /api/ai/generate if empty)
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content.trim().length > 0) {
+            const sanitizedConv: AgentConversation = {
+              ...data.conversation,
+              messages: sanitizedMsgs,
+            };
+            setOptimisticMessages(sanitizedConv.messages);
+            setActiveConvId(sanitizedConv.id);
+            if (onConversationUpserted) {
+              await onConversationUpserted(sanitizedConv);
+            } else if (session?.user) {
+              await saveConversationToSupabase(
+                session.user.id,
+                sanitizedConv.workspaceId,
+                sanitizedConv
+              ).catch(() => null);
+              onConversationsChanged();
+            } else {
+              onConversationsChanged();
+            }
+            return;
           }
         }
-        return;
       }
 
-      // Direct stateless fallback via /api/research/search + /api/ai/generate if auth route fails
+      // Direct stateless fallback via /api/research/search + /api/ai/generate if /api/agent/message failed or returned empty
       let fallbackSources: { title: string; uri: string }[] = [];
       let rawSources: any[] = [];
 
@@ -349,8 +468,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         }).catch(() => null);
 
         if (searchRes && searchRes.ok) {
-          const searchData = await searchRes.json();
-          rawSources = Array.isArray(searchData.sources) ? searchData.sources : [];
+          const { data: searchData } = await readJsonSafe(searchRes);
+          rawSources = Array.isArray(searchData?.sources) ? searchData.sources : [];
           fallbackSources = rawSources.map((s: any) => ({
             title: s.title || s.url,
             uri: s.url,
@@ -366,6 +485,9 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             ...priorHistory.map((m) => ({ role: m.role, content: m.content })),
             { role: 'user', content: rawText },
           ],
+          simulation: compactSim,
+          persona: activePersona || null,
+          webSources: rawSources,
           additionalContexts: cleanedContexts,
           customNote: combinedNote,
           systemPrompt:
@@ -378,37 +500,41 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                   .join('\n')}`
               : undefined,
         }),
-      });
+      }).catch(() => null);
 
-      if (aiRes.ok) {
-        const aiJson = await aiRes.json();
-        const fallbackAssistantMsg: AgentMessage = {
-          id: `msg-a-local-${Date.now()}`,
-          role: 'assistant',
-          content: cleanAiResponseText(aiJson.content || aiJson.result || 'Response generated.'),
-          timestamp: new Date().toISOString(),
-          webSearchUsed: webSearchEnabled,
-          sources: fallbackSources,
-        };
-        const updatedMessages = [...priorHistory, tempUserMsg, fallbackAssistantMsg];
-        const savedConv: AgentConversation = {
-          id: activeConv?.id || crypto.randomUUID(),
-          workspaceId: activeConv?.workspaceId || 'ws-default',
-          title: activeConv?.title || rawText.slice(0, 48),
-          simulationId: selectedSimId || activeConv?.simulationId || null,
-          personaId: selectedPersonaId || activeConv?.personaId || null,
-          createdAt: activeConv?.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          messages: updatedMessages,
-        };
-        setOptimisticMessages(updatedMessages);
-        setActiveConvId(savedConv.id);
-        if (onConversationUpserted) {
-          await onConversationUpserted(savedConv);
+      if (aiRes && aiRes.ok) {
+        const { data: aiJson } = await readJsonSafe(aiRes);
+        const generatedText = cleanAiResponseText(aiJson?.content || aiJson?.result || '');
+        if (generatedText.trim().length > 0) {
+          const fallbackAssistantMsg: AgentMessage = {
+            id: `msg-a-local-${Date.now()}`,
+            role: 'assistant',
+            content: generatedText,
+            timestamp: new Date().toISOString(),
+            webSearchUsed: webSearchEnabled,
+            sources: fallbackSources,
+          };
+          const updatedMessages = [...priorHistory, tempUserMsg, fallbackAssistantMsg];
+          const savedConv: AgentConversation = {
+            id: activeConv?.id || crypto.randomUUID(),
+            workspaceId: activeConv?.workspaceId || activeWorkspaceId || 'ws-default',
+            title: activeConv?.title || rawText.slice(0, 48),
+            simulationId: selectedSimId || activeConv?.simulationId || null,
+            personaId: selectedPersonaId || activeConv?.personaId || null,
+            createdAt: activeConv?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: updatedMessages,
+          };
+          setOptimisticMessages(updatedMessages);
+          setActiveConvId(savedConv.id);
+          if (onConversationUpserted) {
+            await onConversationUpserted(savedConv);
+          }
+          return;
         }
-      } else {
-        setErrorMsg('Unable to get a response from Clemir AI right now. Please try again.');
       }
+
+      setErrorMsg('Unable to get a response from Clemir AI right now. Please try again.');
     } catch {
       setErrorMsg('Network issue while communicating with Clemir AI. Please try again.');
     } finally {

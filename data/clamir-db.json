@@ -96,6 +96,11 @@
       "token": "7b8063bd75f58d7e2908bf27e309ec6a684a3a0bb0f3119e",
       "userId": "user-owner-1",
       "createdAt": "2026-11-16T15:59:02.219Z"
+    },
+    {
+      "token": "8a1f87e9e9f1b7ecc647f7e7184c0d270907dd39a232fbbd",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T16:12:28.989Z"
     }
   ],
   "workspaces": [
@@ -122,6 +127,13 @@
   "conversations": [],
   "reports": [],
   "recentSearches": [
+    {
+      "id": "rs-1794845549005",
+      "workspaceId": "ws-default",
+      "query": "Analyze Verify Sync Persona adoption readiness",
+      "category": "Agent",
+      "timestamp": "2026-11-16T16:12:29.005Z"
+    },
     {
       "id": "rs-1794844736331",
       "workspaceId": "ws-default",

@@ -109,6 +109,16 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
 
   const filledContextCount = additionalContexts.filter((c) => c.content.trim()).length;
 
+  const readJsonSafe = async (res: Response): Promise<{ ok: boolean; data: any }> => {
+    try {
+      const text = await res.text();
+      if (!text) return { ok: res.ok, data: {} };
+      return { ok: res.ok, data: JSON.parse(text) };
+    } catch {
+      return { ok: false, data: null };
+    }
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const rawText = inputMessage.trim();
@@ -141,6 +151,33 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
           title: c.title.trim(),
           content: c.content.trim(),
         }));
+      const combinedNote = serializeAdditionalContexts(additionalContexts);
+
+      const selectedSimObj = simulations.find((s) => s.id === selectedSimId) || null;
+      const selectedPersonaObj = personas.find((p) => p.id === selectedPersonaId) || null;
+      const compactSim = selectedSimObj
+        ? {
+            id: selectedSimObj.id,
+            name: selectedSimObj.name,
+            type: selectedSimObj.type,
+            description: selectedSimObj.description,
+            hypothesis: selectedSimObj.hypothesis,
+            targetAudience: selectedSimObj.targetAudience,
+            status: selectedSimObj.status,
+            stage: selectedSimObj.stage,
+            results: selectedSimObj.results
+              ? {
+                  executiveSummary: selectedSimObj.results.executiveSummary,
+                  sentimentOverview: selectedSimObj.results.sentimentOverview,
+                  personaBreakdown: (selectedSimObj.results.personaBreakdown || []).slice(0, 8),
+                  objectionsAndConcerns: (
+                    selectedSimObj.results.objectionsAndConcerns || []
+                  ).slice(0, 5),
+                  recommendations: (selectedSimObj.results.recommendations || []).slice(0, 5),
+                }
+              : undefined,
+          }
+        : null;
 
       const res = await fetch('/api/agent/message', {
         method: 'POST',
@@ -152,44 +189,49 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
           conversationId: activeConv?.id || null,
           simulationId: selectedSimId || null,
           personaId: selectedPersonaId || null,
+          simulation: compactSim,
+          persona: selectedPersonaObj,
           message: rawText,
-          customContextNote: serializeAdditionalContexts(additionalContexts) || undefined,
+          customContextNote: combinedNote || undefined,
           additionalContexts: cleanedContexts,
           history: priorHistory,
           webSearch: webSearchEnabled,
         }),
-      });
+      }).catch(() => null);
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.conversation) {
-          const sanitizedConv: AgentConversation = {
-            ...data.conversation,
-            messages: Array.isArray(data.conversation.messages)
-              ? data.conversation.messages.map((m: AgentMessage) =>
-                  m.role === 'assistant' ? { ...m, content: cleanAiResponseText(m.content) } : m
-                )
-              : [],
-          };
-          setSelectedConvId(sanitizedConv.id);
-          setLocalMessages(sanitizedConv.messages);
-          if (onConversationUpserted) {
-            await onConversationUpserted(sanitizedConv);
-          } else if (session?.user) {
-            await saveConversationToSupabase(
-              session.user.id,
-              sanitizedConv.workspaceId,
-              sanitizedConv
-            ).catch(() => null);
-            onConversationsChanged();
-          } else {
-            onConversationsChanged();
+      if (res && res.ok) {
+        const { data } = await readJsonSafe(res);
+        if (data?.conversation && Array.isArray(data.conversation.messages)) {
+          const sanitizedMsgs: AgentMessage[] = data.conversation.messages.map(
+            (m: AgentMessage) =>
+              m.role === 'assistant' ? { ...m, content: cleanAiResponseText(m.content) } : m
+          );
+          const lastMsg = sanitizedMsgs[sanitizedMsgs.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content.trim().length > 0) {
+            const sanitizedConv: AgentConversation = {
+              ...data.conversation,
+              messages: sanitizedMsgs,
+            };
+            setSelectedConvId(sanitizedConv.id);
+            setLocalMessages(sanitizedConv.messages);
+            if (onConversationUpserted) {
+              await onConversationUpserted(sanitizedConv);
+            } else if (session?.user) {
+              await saveConversationToSupabase(
+                session.user.id,
+                sanitizedConv.workspaceId,
+                sanitizedConv
+              ).catch(() => null);
+              onConversationsChanged();
+            } else {
+              onConversationsChanged();
+            }
+            return;
           }
         }
-        return;
       }
 
-      // Direct stateless fallback via /api/research/search + /api/ai/generate if auth route fails
+      // Direct stateless fallback via /api/research/search + /api/ai/generate if primary route fails or returns empty
       let fallbackSources: { title: string; uri: string }[] = [];
       let rawSources: any[] = [];
       if (webSearchEnabled) {
@@ -199,8 +241,8 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
           body: JSON.stringify({ queries: [rawText] }),
         }).catch(() => null);
         if (searchRes && searchRes.ok) {
-          const searchJson = await searchRes.json();
-          rawSources = Array.isArray(searchJson.sources) ? searchJson.sources : [];
+          const { data: searchJson } = await readJsonSafe(searchRes);
+          rawSources = Array.isArray(searchJson?.sources) ? searchJson.sources : [];
           fallbackSources = rawSources.map((s: any) => ({
             title: s.title || s.url,
             uri: s.url,
@@ -216,48 +258,56 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
             ...priorHistory.map((m) => ({ role: m.role, content: m.content })),
             { role: 'user', content: rawText },
           ],
+          simulation: compactSim,
+          persona: selectedPersonaObj,
+          webSources: rawSources,
           additionalContexts: cleanedContexts,
-          customNote: serializeAdditionalContexts(additionalContexts),
+          customNote: combinedNote,
           systemPrompt:
             rawSources.length > 0
               ? `Live Web Sources:\n${rawSources
-                  .map((s: any, idx: number) => `[${idx + 1}] ${s.title} (${s.url}): ${s.excerpt || ''}`)
+                  .map(
+                    (s: any, idx: number) =>
+                      `[${idx + 1}] ${s.title} (${s.url}): ${s.excerpt || ''}`
+                  )
                   .join('\n')}`
               : undefined,
         }),
-      });
+      }).catch(() => null);
 
-      if (aiRes.ok) {
-        const aiJson = await aiRes.json();
-        const assistantMsg: AgentMessage = {
-          id: `msg-local-${Date.now()}`,
-          role: 'assistant',
-          content: cleanAiResponseText(
-            aiJson.content || aiJson.result || 'Unable to generate response.'
-          ),
-          timestamp: new Date().toISOString(),
-          webSearchUsed: webSearchEnabled,
-          sources: fallbackSources,
-        };
-        const nextMessages = [...priorHistory, optimisticUserMsg, assistantMsg];
-        const savedConv: AgentConversation = {
-          id: activeConv?.id || crypto.randomUUID(),
-          workspaceId: activeConv?.workspaceId || 'ws-default',
-          title: activeConv?.title || rawText.slice(0, 48),
-          simulationId: selectedSimId || activeConv?.simulationId || null,
-          personaId: selectedPersonaId || activeConv?.personaId || null,
-          createdAt: activeConv?.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          messages: nextMessages,
-        };
-        setSelectedConvId(savedConv.id);
-        setLocalMessages(nextMessages);
-        if (onConversationUpserted) {
-          await onConversationUpserted(savedConv);
+      if (aiRes && aiRes.ok) {
+        const { data: aiJson } = await readJsonSafe(aiRes);
+        const generated = cleanAiResponseText(aiJson?.content || aiJson?.result || '');
+        if (generated.trim().length > 0) {
+          const assistantMsg: AgentMessage = {
+            id: `msg-local-${Date.now()}`,
+            role: 'assistant',
+            content: generated,
+            timestamp: new Date().toISOString(),
+            webSearchUsed: webSearchEnabled,
+            sources: fallbackSources,
+          };
+          const nextMessages = [...priorHistory, optimisticUserMsg, assistantMsg];
+          const savedConv: AgentConversation = {
+            id: activeConv?.id || crypto.randomUUID(),
+            workspaceId: activeConv?.workspaceId || 'ws-default',
+            title: activeConv?.title || rawText.slice(0, 48),
+            simulationId: selectedSimId || activeConv?.simulationId || null,
+            personaId: selectedPersonaId || activeConv?.personaId || null,
+            createdAt: activeConv?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            messages: nextMessages,
+          };
+          setSelectedConvId(savedConv.id);
+          setLocalMessages(nextMessages);
+          if (onConversationUpserted) {
+            await onConversationUpserted(savedConv);
+          }
+          return;
         }
-      } else {
-        setErrorMsg('Unable to reach Clemir AI service. Please try again.');
       }
+
+      setErrorMsg('Unable to reach Clemir AI service. Please try again.');
     } catch {
       setErrorMsg('Connection interrupted while contacting Clemir AI.');
     } finally {

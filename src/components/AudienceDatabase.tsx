@@ -26,13 +26,33 @@ import {
 interface AudienceDatabaseProps {
   personas: Persona[];
   authToken: string;
+  activeWorkspaceId?: string;
+  onPersonaSaved?: (persona: Persona) => void;
+  onPersonaDeleted?: (personaId: string) => void;
+  onToggleFavorite?: (personaId: string) => void;
+  onRestoreBuiltIns?: () => Promise<void> | void;
   onPersonasChanged: () => void;
   onTalkToPersona: (personaId: string) => void;
+}
+
+async function readJsonSafe(res: Response): Promise<{ ok: boolean; data: any }> {
+  try {
+    const text = await res.text();
+    if (!text) return { ok: res.ok, data: {} };
+    return { ok: res.ok, data: JSON.parse(text) };
+  } catch {
+    return { ok: false, data: null };
+  }
 }
 
 export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
   personas,
   authToken,
+  activeWorkspaceId = 'ws-default',
+  onPersonaSaved,
+  onPersonaDeleted,
+  onToggleFavorite,
+  onRestoreBuiltIns,
   onPersonasChanged,
   onTalkToPersona,
 }) => {
@@ -42,11 +62,12 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
     personas[0]?.id || null
   );
   const [editorMode, setEditorMode] = useState<null | 'create' | 'edit'>(null);
+  const [editingSourcePersona, setEditingSourcePersona] = useState<Persona | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Form state for create/edit — All text & numerical fields start empty
+  // Form state for create/edit — Empty on create, prefilled on edit
   const [formName, setFormName] = useState('');
   const [formTagline, setFormTagline] = useState('');
   const [formDescription, setFormDescription] = useState('');
@@ -88,8 +109,36 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
   const selectedPersona =
     personas.find((p) => p.id === selectedPersonaId) || filteredPersonas[0] || null;
 
-  const openEditor = (mode: 'create' | 'edit', _source?: Persona) => {
+  const openEditor = (mode: 'create' | 'edit', source?: Persona) => {
     setEditorMode(mode);
+    if (mode === 'edit' && source) {
+      setEditingSourcePersona(source);
+      setFormName(source.name || '');
+      setFormTagline(source.tagline || '');
+      setFormDescription(source.description || '');
+      setFormAvatarCode(source.avatarCode || '');
+      setFormSegment(source.segment || '');
+      setFormTags(Array.isArray(source.tags) ? source.tags.join(', ') : '');
+      setFormCharacteristics(
+        Array.isArray(source.characteristics) ? source.characteristics.join('\n') : ''
+      );
+      setFormPreferences(Array.isArray(source.preferences) ? source.preferences.join('\n') : '');
+      setFormMotivations(Array.isArray(source.motivations) ? source.motivations.join('\n') : '');
+      setFormPurchasingBehavior(source.purchasingBehavior || '');
+      setFormDecisionFactors(
+        Array.isArray(source.decisionFactors) ? source.decisionFactors.join('\n') : ''
+      );
+      setFormConcerns(Array.isArray(source.concerns) ? source.concerns.join('\n') : '');
+      setFormContext(source.context || '');
+      setFormPriceSensitivity(source.priceSensitivity || 'Moderate');
+      setFormDecisionSpeed(source.decisionSpeed || 'Deliberate');
+      setFormBrandLoyalty(
+        typeof source.brandLoyalty === 'number' ? String(source.brandLoyalty) : ''
+      );
+      return;
+    }
+
+    setEditingSourcePersona(null);
     setFormName('');
     setFormTagline('');
     setFormDescription('');
@@ -124,7 +173,7 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
       tagline: formTagline.trim(),
       description: formDescription.trim(),
       avatarCode: (formAvatarCode.trim() || formName.slice(0, 2)).toUpperCase().slice(0, 3),
-      segment: formSegment.trim(),
+      segment: formSegment.trim() || 'Custom Segment',
       tags: formTags
         .split(',')
         .map((s) => s.trim())
@@ -157,128 +206,196 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
     };
 
     try {
-      const isEdit = editorMode === 'edit' && selectedPersona && !selectedPersona.isBuiltIn;
+      const targetSource = editingSourcePersona || selectedPersona;
+      const isEditCustom = Boolean(
+        editorMode === 'edit' && targetSource && !targetSource.isBuiltIn
+      );
       const {
         data: { session },
       } = await supabase.auth.getSession();
+
+      let supaSavedPersona: Persona | null = null;
       if (session?.user) {
-        await savePersonaToSupabase(
+        const supaRes = await savePersonaToSupabase(
           session.user.id,
-          selectedPersona?.workspaceId || 'ws-default',
+          targetSource?.workspaceId || activeWorkspaceId || 'ws-default',
           payload,
-          isEdit ? selectedPersona?.id : null
+          isEditCustom ? targetSource?.id : null
         ).catch(() => null);
+        if (supaRes?.id) {
+          supaSavedPersona = supaRes as Persona;
+        }
       }
 
-      const url = isEdit ? `/api/personas/${selectedPersona.id}` : '/api/personas';
-      const method = isEdit ? 'PUT' : 'POST';
+      const url =
+        editorMode === 'edit' && targetSource
+          ? `/api/personas/${targetSource.id}`
+          : '/api/personas';
+      const method = editorMode === 'edit' && targetSource ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEditorMode(null);
-        onPersonasChanged();
-        if (data.persona?.id) {
-          setSelectedPersonaId(data.persona.id);
+        body: JSON.stringify({
+          ...payload,
+          ...(supaSavedPersona?.id && !isEditCustom ? { id: supaSavedPersona.id } : {}),
+          workspaceId: activeWorkspaceId || 'ws-default',
+        }),
+      }).catch(() => null);
+
+      let apiPersona: Persona | null = null;
+      if (res && res.ok) {
+        const parsed = await readJsonSafe(res);
+        if (parsed.data?.persona?.id) {
+          apiPersona = parsed.data.persona as Persona;
         }
-        setStatusMessage(
-          isEdit
-            ? `Updated custom audience persona "${payload.name}".`
-            : `Created custom target audience "${payload.name}".`
-        );
       }
+
+      const finalPersona: Persona = {
+        id:
+          supaSavedPersona?.id ||
+          apiPersona?.id ||
+          (isEditCustom && targetSource?.id ? targetSource.id : `persona-custom-${Date.now()}`),
+        workspaceId:
+          supaSavedPersona?.workspaceId ||
+          apiPersona?.workspaceId ||
+          activeWorkspaceId ||
+          'ws-default',
+        ...payload,
+        isBuiltIn: false,
+        isFavorite: Boolean(isEditCustom && targetSource?.isFavorite),
+        createdAt:
+          supaSavedPersona?.createdAt ||
+          apiPersona?.createdAt ||
+          new Date().toISOString(),
+      };
+
+      setEditorMode(null);
+      setEditingSourcePersona(null);
+      if (onPersonaSaved) onPersonaSaved(finalPersona);
+      onPersonasChanged();
+      setSelectedPersonaId(finalPersona.id);
+      setStatusMessage(
+        isEditCustom
+          ? `Updated custom audience persona "${payload.name}".`
+          : `Created custom target audience "${payload.name}".`
+      );
     } finally {
       setSaving(false);
     }
   };
 
   const handleToggleFavorite = async (persona: Persona) => {
+    if (onToggleFavorite) onToggleFavorite(persona.id);
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (session?.user) {
       await toggleFavoritePersonaInSupabase(
         session.user.id,
-        persona.workspaceId || 'ws-default',
+        persona.workspaceId || activeWorkspaceId || 'ws-default',
         persona.id
       ).catch(() => false);
     }
     await fetch(`/api/personas/${persona.id}/favorite`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
+      headers: { ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+    }).catch(() => null);
     onPersonasChanged();
   };
 
   const handleDuplicatePersona = async (persona: Persona) => {
     const res = await fetch(`/api/personas/${persona.id}/duplicate`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user && data.persona) {
-        await savePersonaToSupabase(
-          session.user.id,
-          data.persona.workspaceId || 'ws-default',
-          data.persona
-        ).catch(() => null);
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        sourcePersona: persona,
+        workspaceId: activeWorkspaceId || 'ws-default',
+      }),
+    }).catch(() => null);
+
+    let duplicatedPersona: Persona | null = null;
+    if (res && res.ok) {
+      const parsed = await readJsonSafe(res);
+      if (parsed.data?.persona?.id) {
+        duplicatedPersona = parsed.data.persona as Persona;
       }
-      onPersonasChanged();
-      if (data.persona?.id) {
-        setSelectedPersonaId(data.persona.id);
-      }
-      setStatusMessage(`Duplicated "${persona.name}" into your custom audience database.`);
     }
+    if (!duplicatedPersona) {
+      duplicatedPersona = {
+        ...persona,
+        id: `persona-custom-${Date.now()}`,
+        workspaceId: activeWorkspaceId || 'ws-default',
+        name: `${persona.name} (Copy)`,
+        isBuiltIn: false,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      const supaSaved = await savePersonaToSupabase(
+        session.user.id,
+        activeWorkspaceId || 'ws-default',
+        duplicatedPersona
+      ).catch(() => null);
+      if (supaSaved?.id) {
+        duplicatedPersona = supaSaved as Persona;
+      }
+    }
+
+    if (onPersonaSaved) onPersonaSaved(duplicatedPersona);
+    onPersonasChanged();
+    setSelectedPersonaId(duplicatedPersona.id);
+    setStatusMessage(`Duplicated "${persona.name}" into your custom audience database.`);
   };
 
   const handleDeletePersona = async (id: string) => {
     const target = personas.find((p) => p.id === id);
+    setConfirmDeleteId(null);
+    const remaining = personas.filter((p) => p.id !== id);
+    if (selectedPersonaId === id) {
+      setSelectedPersonaId(remaining[0]?.id || null);
+    }
+    if (onPersonaDeleted) onPersonaDeleted(id);
+
     const {
       data: { session },
     } = await supabase.auth.getSession();
     if (session?.user) {
       await deletePersonaInSupabase(
         session.user.id,
-        target?.workspaceId || 'ws-default',
+        target?.workspaceId || activeWorkspaceId || 'ws-default',
         id
       ).catch(() => false);
     }
-    const res = await fetch(`/api/personas/${id}`, {
+    await fetch(`/api/personas/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (res.ok) {
-      setConfirmDeleteId(null);
-      const remaining = personas.filter((p) => p.id !== id);
-      if (selectedPersonaId === id) {
-        setSelectedPersonaId(remaining[0]?.id || null);
-      }
-      onPersonasChanged();
-      setStatusMessage(
-        `Removed "${target?.name || 'Persona'}" from your workspace audience database.`
-      );
-    }
+      headers: { ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+    }).catch(() => null);
+    onPersonasChanged();
+    setStatusMessage(
+      `Removed "${target?.name || 'Persona'}" from your workspace audience database.`
+    );
   };
 
   const handleRestoreBuiltInPersonas = async () => {
-    const res = await fetch('/api/personas/builtin/restore', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (res.ok) {
-      onPersonasChanged();
-      setStatusMessage('Restored all 7 calibrated built-in personas to your workspace database.');
+    if (onRestoreBuiltIns) {
+      await onRestoreBuiltIns();
     }
+    await fetch('/api/personas/builtin/restore', {
+      method: 'POST',
+      headers: { ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) },
+    }).catch(() => null);
+    onPersonasChanged();
+    setStatusMessage('Restored all 7 calibrated built-in personas to your workspace database.');
   };
 
   const personaBeingDeleted = personas.find((p) => p.id === confirmDeleteId) || null;

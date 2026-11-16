@@ -2,6 +2,30 @@ import { supabase } from "../supabaseClient.js";
 import { BUILT_IN_PERSONAS } from "../data/seedData.ts";
 
 const OWNER_EMAIL = "thexplorervaruns@gmail.com";
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isUuid(val) {
+  return typeof val === "string" && UUID_REGEX.test(val.trim());
+}
+
+async function resolveSupabaseWorkspaceId(userId, workspaceId) {
+  if (isUuid(workspaceId)) return workspaceId.trim();
+  if (!userId) return null;
+  try {
+    const { data: wsRows } = await supabase
+      .from("workspaces")
+      .select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: true })
+      .limit(1);
+    if (Array.isArray(wsRows) && wsRows[0]?.id) {
+      return wsRows[0].id;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
 
 export function normalizeConsistentUserName(rawName, email = "") {
   const cleanEmail = String(email || "").trim().toLowerCase();
@@ -317,7 +341,7 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
       .from("personas")
       .select("*")
       .eq("user_id", userId)
-      .eq("workspace_id", wsId)
+      .or(`workspace_id.eq.${wsId},workspace_id.is.null`)
       .order("created_at", { ascending: true }),
     supabase
       .from("agent_conversations")
@@ -402,9 +426,11 @@ export async function renameWorkspaceInSupabase(userId, workspaceId, name) {
 }
 
 export async function savePersonaToSupabase(userId, workspaceId, personaPayload, existingId = null) {
+  if (!userId) return null;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
   const rowPayload = {
     user_id: userId,
-    workspace_id: workspaceId,
+    workspace_id: safeWsId,
     name: personaPayload.name,
     tagline: personaPayload.tagline || "",
     description: personaPayload.description || "",
@@ -424,7 +450,7 @@ export async function savePersonaToSupabase(userId, workspaceId, personaPayload,
     is_built_in: false,
   };
 
-  if (existingId && !String(existingId).startsWith("persona-")) {
+  if (existingId && isUuid(existingId)) {
     const { data, error } = await supabase
       .from("personas")
       .update(rowPayload)
@@ -446,12 +472,15 @@ export async function savePersonaToSupabase(userId, workspaceId, personaPayload,
 }
 
 export async function deletePersonaInSupabase(userId, workspaceId, personaId) {
+  if (!userId) return false;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
   if (String(personaId).startsWith("persona-") && !String(personaId).startsWith("persona-custom-")) {
+    if (!safeWsId) return true;
     // Built-in persona: record in workspace deleted_builtin_persona_ids
     const { data: ws } = await supabase
       .from("workspaces")
       .select("deleted_builtin_persona_ids")
-      .eq("id", workspaceId)
+      .eq("id", safeWsId)
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -463,13 +492,14 @@ export async function deletePersonaInSupabase(userId, workspaceId, personaId) {
         await supabase
           .from("workspaces")
           .update({ deleted_builtin_persona_ids: [...existing, personaId] })
-          .eq("id", workspaceId)
+          .eq("id", safeWsId)
           .eq("user_id", userId);
       }
     }
     return true;
   }
 
+  if (!isUuid(personaId)) return true;
   const { error } = await supabase
     .from("personas")
     .delete()
@@ -478,7 +508,21 @@ export async function deletePersonaInSupabase(userId, workspaceId, personaId) {
   return !error;
 }
 
+export async function restoreBuiltInPersonasInSupabase(userId, workspaceId) {
+  if (!userId) return false;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
+  if (!safeWsId) return false;
+  const { error } = await supabase
+    .from("workspaces")
+    .update({ deleted_builtin_persona_ids: [] })
+    .eq("id", safeWsId)
+    .eq("user_id", userId);
+  return !error;
+}
+
 export async function saveSimulationToSupabase(userId, workspaceId, sim) {
+  if (!userId) return null;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
   const typeSpecificPayload = {
     ...(sim.typeSpecificData || {}),
     ...(sim.forecastConfig ? { _forecastConfig: sim.forecastConfig } : {}),
@@ -486,7 +530,7 @@ export async function saveSimulationToSupabase(userId, workspaceId, sim) {
 
   const rowPayload = {
     user_id: userId,
-    workspace_id: workspaceId,
+    workspace_id: safeWsId,
     name: sim.name,
     type: sim.type,
     description: sim.description || "",
@@ -508,11 +552,7 @@ export async function saveSimulationToSupabase(userId, workspaceId, sim) {
     results: sim.results || null,
   };
 
-  const isUuid =
-    sim.id &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sim.id);
-
-  if (isUuid) {
+  if (isUuid(sim.id)) {
     const { data, error } = await supabase
       .from("simulations")
       .upsert({ id: sim.id, ...rowPayload })
@@ -531,6 +571,7 @@ export async function saveSimulationToSupabase(userId, workspaceId, sim) {
 }
 
 export async function deleteSimulationInSupabase(userId, simulationId) {
+  if (!isUuid(simulationId)) return true;
   const { error } = await supabase
     .from("simulations")
     .delete()
@@ -540,11 +581,13 @@ export async function deleteSimulationInSupabase(userId, simulationId) {
 }
 
 export async function saveReportToSupabase(userId, workspaceId, report) {
+  if (!userId) return null;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
   const { data, error } = await supabase
     .from("reports")
     .insert({
       user_id: userId,
-      workspace_id: workspaceId,
+      workspace_id: safeWsId,
       simulation_id: report.simulationId,
       simulation_name: report.simulationName,
       title: report.title,
@@ -559,6 +602,7 @@ export async function saveReportToSupabase(userId, workspaceId, report) {
 }
 
 export async function deleteReportInSupabase(userId, reportId) {
+  if (!isUuid(reportId)) return true;
   const { error } = await supabase
     .from("reports")
     .delete()
@@ -568,11 +612,13 @@ export async function deleteReportInSupabase(userId, reportId) {
 }
 
 export async function logRecentSearchToSupabase(userId, workspaceId, item) {
+  if (!userId) return null;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
   const { data, error } = await supabase
     .from("recent_searches")
     .insert({
       user_id: userId,
-      workspace_id: workspaceId,
+      workspace_id: safeWsId,
       query: item.query,
       category: item.category || "Simulation",
       target_id: item.targetId || null,
@@ -626,10 +672,13 @@ export async function updateProfileInSupabase(userId, { name, email, plan }) {
 }
 
 export async function toggleFavoritePersonaInSupabase(userId, workspaceId, personaId) {
+  if (!userId) return false;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
+  if (!safeWsId) return false;
   const { data: ws } = await supabase
     .from("workspaces")
     .select("favorite_persona_ids")
-    .eq("id", workspaceId)
+    .eq("id", safeWsId)
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -642,33 +691,28 @@ export async function toggleFavoritePersonaInSupabase(userId, workspaceId, perso
   const { error } = await supabase
     .from("workspaces")
     .update({ favorite_persona_ids: nextList })
-    .eq("id", workspaceId)
+    .eq("id", safeWsId)
     .eq("user_id", userId);
 
   return !error;
 }
 
 export async function saveConversationToSupabase(userId, workspaceId, conv) {
-  const isUuid =
-    conv.id &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conv.id);
-
-  const simUuid =
-    conv.simulationId &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conv.simulationId)
-      ? conv.simulationId
-      : null;
+  if (!userId) return null;
+  const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
+  const convIsUuid = isUuid(conv.id);
+  const simUuid = isUuid(conv.simulationId) ? conv.simulationId : null;
 
   const rowPayload = {
     user_id: userId,
-    workspace_id: workspaceId,
+    workspace_id: safeWsId,
     simulation_id: simUuid,
     persona_id: conv.personaId || null,
     title: conv.title || "Research Conversation",
     messages: Array.isArray(conv.messages) ? conv.messages : [],
   };
 
-  if (isUuid) {
+  if (convIsUuid) {
     const { data, error } = await supabase
       .from("agent_conversations")
       .upsert({ id: conv.id, ...rowPayload })

@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { ClamirLogo } from './ClamirLogo.tsx';
-import { BUILT_IN_PERSONAS, INITIAL_SAMPLE_SIMULATIONS } from '../data/seedData.ts';
+import { BUILT_IN_PERSONAS, SIMULATION_TYPES_META } from '../data/seedData.ts';
 import { DecisionSpeed, PlatformConfig, PriceSensitivity } from '../types/clamir.ts';
 
 interface LandingPageProps {
@@ -24,8 +24,9 @@ interface LandingPageProps {
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetStarted }) => {
-  const [selectedPreviewPersonaId, setSelectedPreviewPersonaId] = useState<string>('persona-quality-seekers');
-  const [showBriefModal, setShowBriefModal] = useState(false);
+  const [selectedPreviewPersonaId, setSelectedPreviewPersonaId] = useState<string>(
+    BUILT_IN_PERSONAS[0]?.id || 'persona-experience-seekers'
+  );
   const [infoModal, setInfoModal] = useState<null | 'docs' | 'privacy' | 'terms' | 'contact'>(null);
 
   // Interactive Demo state — All text fields start empty, no automatic content
@@ -38,6 +39,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
   const [customDecisionSpeed, setCustomDecisionSpeed] = useState<DecisionSpeed>('Deliberate');
 
   const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
   const [demoResponse, setDemoResponse] = useState<{
     personaName: string;
     reaction: string;
@@ -48,15 +50,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
     engineMode: string;
   } | null>(null);
 
-  const sampleSim = INITIAL_SAMPLE_SIMULATIONS[0];
-  const activePreviewBreakdown =
-    sampleSim.results?.personaBreakdown.find((p) => p.personaId === selectedPreviewPersonaId) ||
-    sampleSim.results?.personaBreakdown[0];
+  const activePreviewPersona =
+    BUILT_IN_PERSONAS.find((p) => p.id === selectedPreviewPersonaId) || BUILT_IN_PERSONAS[0];
 
   const handleRunInteractiveDemo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!demoQuestion.trim()) return;
     setDemoLoading(true);
+    setDemoError(null);
     try {
       const payload =
         demoAudienceMode === 'custom'
@@ -77,30 +78,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
         setDemoResponse(data);
+      } else {
+        setDemoResponse(null);
+        setDemoError(
+          data?.error || 'Unable to run live AI simulation right now. Please try again.'
+        );
       }
     } catch {
-      const persona = BUILT_IN_PERSONAS.find((p) => p.id === demoPersonaId) || BUILT_IN_PERSONAS[0];
-      const targetName =
-        demoAudienceMode === 'custom'
-          ? customAudienceName.trim() || 'Custom Target Audience'
-          : persona.name;
-      setDemoResponse({
-        personaName: targetName,
-        reaction: 'Analytical Evaluation',
-        acceptanceScore: 78,
-        response: `Evaluating "${demoQuestion}" from the perspective of ${targetName}: ${
-          demoAudienceMode === 'custom' ? customAudienceDescription : persona.tagline
-        }`,
-        keyObjection:
-          demoAudienceMode === 'custom'
-            ? 'Needs clear proof of workflow fit and transparent onboarding terms.'
-            : persona.concerns[0],
-        opportunity: 'Highlight measurable outcomes and provide an interactive guided walkthrough.',
-        engineMode: 'Sample AI-Generated Output',
-      });
+      setDemoResponse(null);
+      setDemoError('Network error while connecting to the live AI simulation service.');
     } finally {
       setDemoLoading(false);
     }
@@ -225,50 +214,49 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
             </div>
           </div>
 
-          {/* Realistic Application Preview Card */}
+          {/* Workspace Architecture & Audience Explorer Preview */}
           <div className="mt-16 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg overflow-hidden shadow-xs">
-            {/* Top Simulation Window Header */}
+            {/* Top Workspace Header */}
             <div className="bg-white border-b border-[#E5E7EB] px-6 py-4 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="font-mono text-xs font-semibold text-[#111827]">CLEMIR AI WORKSPACE</span>
                 <span className="text-[#E5E7EB]">/</span>
                 <h2 className="text-sm font-semibold text-[#111827] truncate">
-                  {sampleSim.name}
+                  Audience Calibration &amp; Simulation Architecture
                 </h2>
-                <span className="text-xs text-[#6B7280] hidden sm:inline">
-                  · Simulated Output Preview (Not Actual Human Research)
-                </span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setShowBriefModal(true)}
+                  onClick={() => scrollToSection('interactive-demo')}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-[#F9FAFB] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5" />
-                  <span>View Full Brief</span>
+                  <span>Try Live Sandbox</span>
                 </button>
               </div>
             </div>
 
             {/* Preview Body Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#E5E7EB]">
-              {/* Left Column: Customer Persona Selector Cards */}
+              {/* Left Column: Starter Audience Archetypes */}
               <div className="lg:col-span-4 p-6 bg-white">
                 <div className="flex items-center justify-between mb-3.5">
                   <span className="text-xs font-bold text-[#111827] tracking-tight">
-                    SIMULATED AUDIENCE SEGMENTS
+                    AUDIENCE ARCHETYPES
                   </span>
-                  <span className="text-xs font-mono text-[#6B7280] tabular-nums">30 AI Agents</span>
+                  <span className="text-xs font-mono text-[#6B7280] tabular-nums">
+                    {BUILT_IN_PERSONAS.length} Presets + Custom
+                  </span>
                 </div>
                 <div className="space-y-2.5">
-                  {sampleSim.results?.personaBreakdown.map((pb) => {
-                    const isSelected = pb.personaId === activePreviewBreakdown?.personaId;
+                  {BUILT_IN_PERSONAS.slice(0, 4).map((persona) => {
+                    const isSelected = persona.id === activePreviewPersona?.id;
                     return (
                       <button
-                        key={pb.personaId}
+                        key={persona.id}
                         type="button"
-                        onClick={() => setSelectedPreviewPersonaId(pb.personaId)}
+                        onClick={() => setSelectedPreviewPersonaId(persona.id)}
                         className={`w-full text-left p-4 rounded-md border transition-colors cursor-pointer ${
                           isSelected
                             ? 'bg-[#F9FAFB] border-[#000000]'
@@ -276,16 +264,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-bold text-[#111827]">{pb.personaName}</span>
-                          <span className="text-xs font-mono font-bold text-[#111827] tabular-nums">
-                            {pb.acceptanceScore}/100
+                          <span className="text-sm font-bold text-[#111827]">{persona.name}</span>
+                          <span className="text-xs font-mono font-semibold text-[#6B7280]">
+                            {persona.avatarCode}
                           </span>
                         </div>
-                        <p className="mt-1.5 text-xs text-[#6B7280] line-clamp-2">{pb.mainTakeaway}</p>
+                        <p className="mt-1.5 text-xs text-[#6B7280] line-clamp-2">{persona.tagline}</p>
                         <div className="mt-2.5 flex items-center gap-2 text-[11px] text-[#6B7280] font-mono">
-                          <span>Reaction: {pb.overallReaction}</span>
+                          <span>Price: {persona.priceSensitivity}</span>
                           <span>·</span>
-                          <span>{pb.agentCount} agents</span>
+                          <span>Speed: {persona.decisionSpeed}</span>
                         </div>
                       </button>
                     );
@@ -293,110 +281,94 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                 </div>
               </div>
 
-              {/* Center Column: Selected Persona Simulated Opinion & Findings */}
+              {/* Center Column: Selected Archetype Parameters */}
               <div className="lg:col-span-5 p-6 bg-white flex flex-col justify-between">
-                {activePreviewBreakdown && (
+                {activePreviewPersona && (
                   <div>
                     <div className="flex items-center justify-between gap-2 pb-4 border-b border-[#E5E7EB]">
                       <div>
-                        <span className="text-xs font-mono text-[#6B7280]">SELECTED AUDIENCE RESPONSE</span>
+                        <span className="text-xs font-mono text-[#6B7280]">AUDIENCE PROFILE MODEL</span>
                         <h3 className="text-base font-bold text-[#111827] mt-0.5">
-                          {activePreviewBreakdown.personaName}
+                          {activePreviewPersona.name}
                         </h3>
                       </div>
                       <div className="text-right font-mono">
-                        <span className="text-xs text-[#6B7280] block">Confidence</span>
+                        <span className="text-xs text-[#6B7280] block">Brand Loyalty</span>
                         <span className="text-sm font-bold text-[#111827] tabular-nums">
-                          {activePreviewBreakdown.confidenceScore}%
+                          {activePreviewPersona.brandLoyalty}/100
                         </span>
                       </div>
                     </div>
 
                     <div className="mt-4">
                       <p className="text-xs font-semibold text-[#6B7280] mb-2">
-                        Simulated Persona Perspective:
+                        Behavioral Description:
                       </p>
-                      <blockquote className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs sm:text-sm text-[#111827] leading-relaxed">
-                        {activePreviewBreakdown.simulatedStatement}
-                      </blockquote>
+                      <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs sm:text-sm text-[#111827] leading-relaxed">
+                        {activePreviewPersona.description}
+                      </div>
                     </div>
 
-                    <div className="mt-4 space-y-1.5">
-                      <p className="text-xs font-bold text-[#111827]">Core Reasoning &amp; Decision Logic</p>
-                      <p className="text-xs text-[#6B7280] leading-relaxed">
-                        {activePreviewBreakdown.reasoning}
-                      </p>
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <p className="font-bold text-[#111827] mb-1">Decision Factors</p>
+                        <ul className="space-y-1 text-[#6B7280]">
+                          {activePreviewPersona.decisionFactors.slice(0, 3).map((factor) => (
+                            <li key={factor}>- {factor}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-bold text-[#111827] mb-1">Primary Concerns</p>
+                        <ul className="space-y-1 text-[#6B7280]">
+                          {activePreviewPersona.concerns.slice(0, 3).map((concern) => (
+                            <li key={concern}>- {concern}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 <div className="mt-6 pt-4 border-t border-[#E5E7EB]">
-                  <p className="text-xs font-bold text-[#111827]">Executive Summary Finding</p>
+                  <p className="text-xs font-bold text-[#111827]">Live Web &amp; OpenRouter Evidence Pipeline</p>
                   <p className="mt-1 text-xs text-[#6B7280] leading-relaxed">
-                    {sampleSim.results?.executiveSummary.mainFinding}
+                    Launch simulations in your workspace with live web research and structured multi-persona scoring—no pre-canned results.
                   </p>
                 </div>
               </div>
 
-              {/* Right Column: Comparison Chart */}
+              {/* Right Column: Supported Research Modes */}
               <div className="lg:col-span-3 p-6 bg-[#F9FAFB] flex flex-col justify-between">
                 <div>
                   <span className="text-xs font-bold text-[#111827] block mb-1">
-                    Audience Acceptance Matrix
+                    Simulation Engines
                   </span>
                   <span className="text-[11px] text-[#6B7280] block mb-4">
-                    Simulated score (0–100 scale)
+                    Available research workflows
                   </span>
 
-                  <div className="space-y-4">
-                    {sampleSim.results?.personaBreakdown.map((pb) => (
-                      <div key={pb.personaId}>
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className="font-medium text-[#111827]">{pb.personaName}</span>
-                          <span className="font-mono font-semibold text-[#111827] tabular-nums">
-                            {pb.acceptanceScore}%
-                          </span>
-                        </div>
-                        <div className="w-full h-2 bg-[#E5E7EB] rounded-xs overflow-hidden">
-                          <div
-                            className="h-full bg-[#000000]"
-                            style={{ width: `${pb.acceptanceScore}%` }}
-                          />
+                  <div className="space-y-2.5">
+                    {SIMULATION_TYPES_META.slice(0, 6).map((mode) => (
+                      <div
+                        key={mode.id}
+                        className="p-2.5 bg-white border border-[#E5E7EB] rounded-md"
+                      >
+                        <div className="text-xs font-semibold text-[#111827]">{mode.name}</div>
+                        <div className="text-[11px] text-[#6B7280] line-clamp-1 mt-0.5">
+                          {mode.description}
                         </div>
                       </div>
                     ))}
-                  </div>
-
-                  <div className="mt-6 pt-5 border-t border-[#E5E7EB]">
-                    <span className="text-xs font-bold text-[#111827] block mb-2">
-                      Overall Simulated Sentiment
-                    </span>
-                    <div className="w-full h-3 bg-[#E5E7EB] rounded-xs overflow-hidden flex">
-                      <div
-                        className="bg-[#000000] h-full"
-                        style={{ width: `${sampleSim.results?.sentimentOverview.positive}%` }}
-                        title="Positive"
-                      />
-                      <div
-                        className="bg-[#9CA3AF] h-full"
-                        style={{ width: `${sampleSim.results?.sentimentOverview.neutral}%` }}
-                        title="Neutral"
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px] font-mono text-[#6B7280] tabular-nums">
-                      <span>Pos: {sampleSim.results?.sentimentOverview.positive}%</span>
-                      <span>Neu: {sampleSim.results?.sentimentOverview.neutral}%</span>
-                      <span>Neg: {sampleSim.results?.sentimentOverview.negative}%</span>
-                    </div>
                   </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setShowBriefModal(true)}
+                  onClick={() => onGetStarted('simulations')}
                   className="mt-6 w-full py-2.5 px-3 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 transition-colors cursor-pointer"
                 >
-                  View Full Brief
+                  Open Simulations Workspace
                 </button>
               </div>
             </div>
@@ -773,6 +745,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
               </div>
             </form>
 
+            {demoError && (
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
+                {demoError}
+              </div>
+            )}
+
             {demoResponse && (
               <div className="mt-6 pt-6 border-t border-[#E5E7EB]">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -971,77 +949,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
           </div>
         </div>
       </footer>
-
-      {/* View Full Brief Modal */}
-      {showBriefModal && sampleSim.results && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-          <div className="w-full max-w-3xl bg-white border border-[#E5E7EB] rounded-lg p-6 my-8 max-h-[88vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
-              <div>
-                <span className="text-xs font-mono text-[#6B7280]">SAMPLE SIMULATION BRIEF · CLEMIR AI</span>
-                <h3 className="text-lg font-bold text-[#111827]">{sampleSim.name}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowBriefModal(false)}
-                className="p-1.5 text-[#6B7280] hover:text-[#111827] rounded-md cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-5 text-xs sm:text-sm">
-              <div className="p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs text-[#6B7280]">
-                {sampleSim.results.simulationNotice}
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-[#111827]">Executive Summary</h4>
-                <p className="mt-1 text-[#6B7280]">{sampleSim.results.executiveSummary.mainFinding}</p>
-                <p className="mt-2 text-[#6B7280]">{sampleSim.results.executiveSummary.overallReaction}</p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold text-[#111827] mb-2">Persona Breakdown</h4>
-                <div className="space-y-3">
-                  {sampleSim.results.personaBreakdown.map((pb) => (
-                    <div key={pb.personaId} className="p-3.5 border border-[#E5E7EB] rounded-md">
-                      <div className="flex items-center justify-between font-semibold text-[#111827]">
-                        <span>{pb.personaName}</span>
-                        <span className="font-mono tabular-nums">Acceptance: {pb.acceptanceScore}/100</span>
-                      </div>
-                      <p className="mt-1 text-xs text-[#6B7280]">{pb.mainTakeaway}</p>
-                      <p className="mt-2 text-xs italic text-[#111827] bg-[#F9FAFB] p-2.5 rounded border border-[#E5E7EB]">
-                        {pb.simulatedStatement}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
-                <button
-                  type="button"
-                  onClick={() => setShowBriefModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#111827] border border-[#E5E7EB] rounded-md hover:bg-[#F9FAFB] cursor-pointer"
-                >
-                  Close Preview
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowBriefModal(false);
-                    onGetStarted('simulations');
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 cursor-pointer"
-                >
-                  Open in Clemir AI Workspace
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Footer Info Modal (Documentation, Privacy Policy, Terms, Contact) */}
       {infoModal && (

@@ -35,7 +35,6 @@ import {
 import {
   BUILT_IN_PERSONAS,
   INITIAL_PLATFORM_CONFIG,
-  INITIAL_SAMPLE_SIMULATIONS,
 } from './src/data/seedData.ts';
 
 dotenv.config();
@@ -278,56 +277,98 @@ function loadDatabase(): DatabaseSchema {
         ...u,
         name: normalizeServerUserName(u.name, u.email),
       }));
-      parsed.workspaces = parsed.workspaces.map((w) =>
-        w.id === 'ws-default' ||
-        w.name === 'Clamir Workspace' ||
-        w.name === 'Clamir Research Lab' ||
-        w.name === "Varun's Workspace" ||
-        w.name === 'VUser Workspace' ||
-        w.name === "VUser's Workspace"
-          ? { ...w, name: 'Clemir Workspace' }
-          : w
-      );
+      parsed.workspaces = (parsed.workspaces || [])
+        .filter((w) => w.id !== 'ws-growth-experiments')
+        .map((w) =>
+          w.id === 'ws-default' ||
+          w.name === 'Clamir Workspace' ||
+          w.name === 'Clamir Research Lab' ||
+          w.name === "Varun's Workspace" ||
+          w.name === 'VUser Workspace' ||
+          w.name === "VUser's Workspace"
+            ? { ...w, name: 'Clemir Workspace' }
+            : w
+        );
+
       if (Array.isArray(parsed.conversations)) {
-        parsed.conversations = parsed.conversations.map((c) => ({
-          ...c,
-          messages: (c.messages || []).map((m) => ({
-            ...m,
-            content: cleanNaturalAssistantText(
-              (m.content || '').replace(/Clamir Studio Pro/g, 'Clemir Studio Pro')
-            ),
-          })),
-        }));
+        parsed.conversations = parsed.conversations
+          .filter((c) => c && c.id && !c.id.startsWith('conv-seed-'))
+          .map((c) => ({
+            ...c,
+            messages: (c.messages || []).map((m) => ({
+              ...m,
+              content: cleanNaturalAssistantText(
+                (m.content || '').replace(/Clamir Studio Pro/g, 'Clemir Studio Pro')
+              ),
+            })),
+          }));
+      } else {
+        parsed.conversations = [];
       }
+
       if (Array.isArray(parsed.reports)) {
-        parsed.reports = parsed.reports.map((r) => ({
-          ...r,
-          title: (r.title || '').replace(/Clamir/g, 'Clemir'),
-          simulationName: (r.simulationName || '').replace(/Clamir/g, 'Clemir'),
-        }));
+        parsed.reports = parsed.reports
+          .filter((r) => r && r.id && !r.id.startsWith('rep-seed-'))
+          .map((r) => ({
+            ...r,
+            title: (r.title || '').replace(/Clamir/g, 'Clemir'),
+            simulationName: (r.simulationName || '').replace(/Clamir/g, 'Clemir'),
+          }));
+      } else {
+        parsed.reports = [];
       }
+
       if (Array.isArray(parsed.simulations)) {
-        parsed.simulations = parsed.simulations.map((s) => ({
-          ...s,
-          name: (s.name || '').replace(/Clamir Studio Pro/g, 'Clemir Studio Pro'),
-          results: s.results
-            ? {
-                ...s.results,
-                simulationNotice: (s.results.simulationNotice || '').replace(
-                  /Clamir Engine/g,
-                  'Clemir Engine'
-                ),
-                personaBreakdown: (s.results.personaBreakdown || []).map((pb) => ({
-                  ...pb,
-                  simulatedStatement: cleanNaturalAssistantText(pb.simulatedStatement || ''),
-                })),
-              }
-            : undefined,
-        }));
+        parsed.simulations = parsed.simulations
+          .filter(
+            (s) =>
+              s &&
+              s.id &&
+              !s.id.startsWith('sim-sample-') &&
+              !(s as Simulation & { isSample?: boolean }).isSample
+          )
+          .map((s) => {
+            const { isSample: _removedSampleFlag, ...rest } = s as Simulation & {
+              isSample?: boolean;
+            };
+            return {
+              ...rest,
+              name: (rest.name || '').replace(/Clamir Studio Pro/g, 'Clemir Studio Pro'),
+              results: rest.results
+                ? {
+                    ...rest.results,
+                    simulationNotice: (rest.results.simulationNotice || '').replace(
+                      /Clamir Engine/g,
+                      'Clemir Engine'
+                    ),
+                    personaBreakdown: (rest.results.personaBreakdown || []).map((pb) => ({
+                      ...pb,
+                      simulatedStatement: cleanNaturalAssistantText(pb.simulatedStatement || ''),
+                    })),
+                  }
+                : undefined,
+            };
+          });
+      } else {
+        parsed.simulations = [];
       }
+
+      if (Array.isArray(parsed.recentSearches)) {
+        parsed.recentSearches = parsed.recentSearches.filter(
+          (rs) =>
+            rs &&
+            rs.id &&
+            !rs.id.startsWith('rs-seed-') &&
+            rs.query !== 'Temp Verification Sim'
+        );
+      } else {
+        parsed.recentSearches = [];
+      }
+
+      saveDatabase(parsed);
       return parsed;
     } catch {
-      // Fall through to seed default DB
+      // Fall through to initialize clean DB
     }
   }
 
@@ -351,107 +392,22 @@ function loadDatabase(): DatabaseSchema {
     role: 'Owner',
   };
 
-  const secondWorkspace: Workspace = {
-    id: 'ws-growth-experiments',
-    name: 'Q4 Growth & Pricing Experiments',
-    ownerId: ownerUser.id,
-    createdAt: '2026-11-11T12:00:00Z',
-    role: 'Owner',
-  };
-
-  const initialReports: ReportArtifact[] = [
-    {
-      id: 'rep-seed-1',
-      workspaceId: 'ws-default',
-      simulationId: INITIAL_SAMPLE_SIMULATIONS[0].id,
-      simulationName: INITIAL_SAMPLE_SIMULATIONS[0].name,
-      title: 'Clemir Studio Pro — Pricing Analysis Brief (PDF)',
-      format: 'PDF',
-      sizeLabel: '42 KB',
-      createdAt: '2026-11-12T10:25:00Z',
-      summarySnippet:
-        INITIAL_SAMPLE_SIMULATIONS[0].results?.executiveSummary.mainFinding || '',
-    },
-    {
-      id: 'rep-seed-2',
-      workspaceId: 'ws-default',
-      simulationId: INITIAL_SAMPLE_SIMULATIONS[1].id,
-      simulationName: INITIAL_SAMPLE_SIMULATIONS[1].name,
-      title: 'Landing Hero Messaging A/B Data Export (JSON)',
-      format: 'JSON',
-      sizeLabel: '28 KB',
-      createdAt: '2026-11-13T14:05:00Z',
-      summarySnippet:
-        INITIAL_SAMPLE_SIMULATIONS[1].results?.executiveSummary.mainFinding || '',
-    },
-  ];
-
-  const initialConversations: AgentConversation[] = [
-    {
-      id: 'conv-seed-1',
-      workspaceId: 'ws-default',
-      title: 'Pricing Tier Objections & ROI Anchoring',
-      simulationId: INITIAL_SAMPLE_SIMULATIONS[0].id,
-      personaId: null,
-      createdAt: '2026-11-12T11:00:00Z',
-      updatedAt: '2026-11-12T11:02:00Z',
-      messages: [
-        {
-          id: 'msg-seed-1',
-          role: 'user',
-          content: 'What are the biggest customer concerns in our Pricing Analysis simulation?',
-          timestamp: '2026-11-12T11:00:30Z',
-        },
-        {
-          id: 'msg-seed-2',
-          role: 'assistant',
-          content:
-            'Based on the persona responses in "Clemir Studio Pro — Usage vs. Seat Pricing Analysis":\n\n1. Step-Up Gap ($0 to $149/mo): Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5 to 8 studies a month.\n2. Deliverable Verification: Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. Quota Clarity: Personas recommended replacing vague usage limits with an explicit monthly query number so teams can forecast usage accurately.',
-          timestamp: '2026-11-12T11:01:00Z',
-          webSearchUsed: false,
-        },
-      ],
-    },
-  ];
-
-  const seeded: DatabaseSchema = {
+  const cleanDb: DatabaseSchema = {
     users: [ownerUser],
     sessions: [],
-    workspaces: [defaultWorkspace, secondWorkspace],
+    workspaces: [defaultWorkspace],
     customPersonas: [],
-    favoritePersonaIdsByWorkspace: {
-      'ws-default': [
-        'persona-experience-seekers',
-        'persona-value-optimizers',
-        'persona-quality-seekers',
-      ],
-    },
-    simulations: [...INITIAL_SAMPLE_SIMULATIONS],
-    conversations: initialConversations,
-    reports: initialReports,
-    recentSearches: [
-      {
-        id: 'rs-seed-1',
-        workspaceId: 'ws-default',
-        query: INITIAL_SAMPLE_SIMULATIONS[0].name,
-        category: 'Simulation',
-        targetId: INITIAL_SAMPLE_SIMULATIONS[0].id,
-        timestamp: '2026-11-13T16:10:00Z',
-      },
-      {
-        id: 'rs-seed-2',
-        workspaceId: 'ws-default',
-        query: INITIAL_SAMPLE_SIMULATIONS[1].name,
-        category: 'Simulation',
-        targetId: INITIAL_SAMPLE_SIMULATIONS[1].id,
-        timestamp: '2026-11-13T17:20:00Z',
-      },
-    ],
+    favoritePersonaIdsByWorkspace: {},
+    deletedBuiltInPersonaIdsByWorkspace: {},
+    simulations: [],
+    conversations: [],
+    reports: [],
+    recentSearches: [],
     platformConfig: INITIAL_PLATFORM_CONFIG,
   };
 
-  saveDatabase(seeded);
-  return seeded;
+  saveDatabase(cleanDb);
+  return cleanDb;
 }
 
 function saveDatabase(db: DatabaseSchema) {
@@ -467,11 +423,7 @@ const db = loadDatabase();
 // 3. Helper: Persona Lookup by Workspace
 // ---------------------------------------------------------------------------
 function getAllPersonasForWorkspace(workspaceId: string): Persona[] {
-  const favIds = db.favoritePersonaIdsByWorkspace[workspaceId] || [
-    'persona-experience-seekers',
-    'persona-value-optimizers',
-    'persona-quality-seekers',
-  ];
+  const favIds = db.favoritePersonaIdsByWorkspace[workspaceId] || [];
   const deletedBuiltInIds = db.deletedBuiltInPersonaIdsByWorkspace?.[workspaceId] || [];
   const activeBuiltIns = BUILT_IN_PERSONAS.filter((p) => !deletedBuiltInIds.includes(p.id));
   const custom = db.customPersonas.filter((p) => p.workspaceId === workspaceId);
@@ -588,14 +540,6 @@ function ensureUserAndWorkspaceForSupabase(params: {
       role: 'Owner',
     };
     db.workspaces.push(newWs);
-
-    const starterSims: Simulation[] = INITIAL_SAMPLE_SIMULATIONS.map((s) => ({
-      ...s,
-      id: `${s.id}-${newWs.id}`,
-      workspaceId: newWs.id,
-      isSample: true,
-    }));
-    db.simulations.push(...starterSims);
     saveDatabase(db);
   } else {
     const resolvedName = normalizeServerUserName(user.name, user.email || cleanEmail, params.name);
@@ -798,19 +742,14 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
         engineMode: 'Clemir AI Assistant',
       });
       return;
-    } catch {
-      // Fallback below
+    } catch (err) {
+      res.status(502).json({
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Unable to run live AI simulation right now. Please try again.',
+      });
     }
-
-    res.json({
-      personaName: persona.name,
-      reaction: persona.priceSensitivity === 'Very High' ? 'ROI-Conditional' : 'Positive Interest',
-      acceptanceScore: persona.priceSensitivity === 'Very High' ? 72 : 84,
-      response: `Evaluating "${qText}" from the ${persona.name} perspective: ${persona.tagline} We weigh ${persona.decisionFactors.slice(0, 2).join(' and ').toLowerCase()} heavily before committing.`,
-      keyObjection: persona.concerns[0],
-      opportunity: `Highlight ${persona.preferences[0].toLowerCase()} in the initial trial experience.`,
-      engineMode: 'Clemir AI Assistant',
-    });
   });
 
   // Authentication Endpoints
@@ -851,18 +790,9 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       role: 'Owner',
     };
 
-    // Clone sample simulations into the user's new workspace so they have sample data labeled clearly
-    const starterSims: Simulation[] = INITIAL_SAMPLE_SIMULATIONS.map((s) => ({
-      ...s,
-      id: `${s.id}-${newWs.id}`,
-      workspaceId: newWs.id,
-      isSample: true,
-    }));
-
     const token = crypto.randomBytes(24).toString('hex');
     db.users.push(newUser);
     db.workspaces.push(newWs);
-    db.simulations.push(...starterSims);
     db.sessions.push({ token, userId: newUser.id, createdAt: new Date().toISOString() });
     saveDatabase(db);
 
@@ -1093,7 +1023,6 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       progress: 8,
       startedAt: new Date().toISOString(),
       estimatedSecondsRemaining: 8,
-      isSample: false,
     };
 
     db.simulations.unshift(newSim);
@@ -1600,6 +1529,68 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       saveDatabase(db);
     }
     res.json({ user: sanitizeUser(user) });
+  });
+
+  // Permanently clear all stored account data (simulations, chats, reports, searches, custom personas, extra workspaces)
+  app.delete('/api/account/data', requireAuth, (req: AuthedRequest, res) => {
+    const user = req.user!;
+    const userWorkspaces = db.workspaces.filter((w) => w.ownerId === user.id);
+    const userWsIds = new Set(userWorkspaces.map((w) => w.id));
+
+    for (const sim of db.simulations) {
+      if (userWsIds.has(sim.workspaceId)) {
+        const timer = activeJobTimers.get(sim.id);
+        if (timer) {
+          clearTimeout(timer);
+          activeJobTimers.delete(sim.id);
+        }
+      }
+    }
+
+    db.simulations = db.simulations.filter((s) => !userWsIds.has(s.workspaceId));
+    db.conversations = db.conversations.filter((c) => !userWsIds.has(c.workspaceId));
+    db.reports = db.reports.filter((r) => !userWsIds.has(r.workspaceId));
+    db.recentSearches = db.recentSearches.filter((rs) => !userWsIds.has(rs.workspaceId));
+    db.customPersonas = db.customPersonas.filter(
+      (p) => !p.workspaceId || !userWsIds.has(p.workspaceId)
+    );
+
+    for (const wsId of userWsIds) {
+      delete db.favoritePersonaIdsByWorkspace[wsId];
+      if (db.deletedBuiltInPersonaIdsByWorkspace) {
+        delete db.deletedBuiltInPersonaIdsByWorkspace[wsId];
+      }
+    }
+
+    const primaryWs: Workspace = userWorkspaces[0]
+      ? {
+          ...userWorkspaces[0],
+          name: 'Clemir Workspace',
+        }
+      : {
+          id: `ws-${Date.now()}`,
+          name: 'Clemir Workspace',
+          ownerId: user.id,
+          createdAt: new Date().toISOString(),
+          role: 'Owner',
+        };
+
+    db.workspaces = [
+      ...db.workspaces.filter((w) => w.ownerId !== user.id),
+      primaryWs,
+    ];
+    db.favoritePersonaIdsByWorkspace[primaryWs.id] = [];
+    if (!db.deletedBuiltInPersonaIdsByWorkspace) {
+      db.deletedBuiltInPersonaIdsByWorkspace = {};
+    }
+    db.deletedBuiltInPersonaIdsByWorkspace[primaryWs.id] = [];
+
+    saveDatabase(db);
+    res.json({
+      ok: true,
+      workspace: primaryWs,
+      workspaces: [primaryWs],
+    });
   });
 
   // Owner Settings Endpoint (Server-Side Verified Permission Check)

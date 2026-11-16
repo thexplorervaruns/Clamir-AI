@@ -158,12 +158,6 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
             <span>{typeMeta?.name || simulation.type}</span>
             <span>·</span>
             <span>Started {new Date(simulation.startedAt).toLocaleString()}</span>
-            {simulation.isSample && (
-              <>
-                <span>·</span>
-                <span className="text-[#111827] font-semibold">Sample Simulation Data</span>
-              </>
-            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#111827] mt-1">{simulation.name}</h1>
           {simulation.researchObjectives && (

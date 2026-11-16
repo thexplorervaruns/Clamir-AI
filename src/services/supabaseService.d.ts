@@ -139,4 +139,8 @@ export declare function clearAllConversationsInSupabase(
   workspaceId: string
 ): Promise<boolean>;
 
+export declare function clearAllAccountDataInSupabase(
+  userId: string
+): Promise<{ ok: boolean; workspaceId: string | null }>;
+
 

@@ -148,7 +148,6 @@ function mapSimulationRow(row) {
     startedAt: row.started_at || row.created_at || new Date().toISOString(),
     completedAt: row.completed_at || undefined,
     estimatedSecondsRemaining: row.estimated_seconds_remaining,
-    isSample: Boolean(row.is_sample),
     results: row.results || undefined,
   };
 }
@@ -287,11 +286,7 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
         user_id: userId,
         name: "Clemir Workspace",
         role: "Owner",
-        favorite_persona_ids: [
-          "persona-experience-seekers",
-          "persona-value-optimizers",
-          "persona-quality-seekers",
-        ],
+        favorite_persona_ids: [],
         deleted_builtin_persona_ids: [],
       })
       .select("*")
@@ -501,7 +496,7 @@ export async function saveSimulationToSupabase(userId, workspaceId, sim) {
     started_at: sim.startedAt || new Date().toISOString(),
     completed_at: sim.completedAt || null,
     estimated_seconds_remaining: sim.estimatedSecondsRemaining ?? null,
-    is_sample: Boolean(sim.isSample),
+    is_sample: false,
     results: sim.results || null,
   };
 
@@ -699,6 +694,54 @@ export async function clearAllConversationsInSupabase(userId, workspaceId) {
     .eq("user_id", userId)
     .eq("workspace_id", workspaceId);
   return !error;
+}
+
+export async function clearAllAccountDataInSupabase(userId) {
+  if (!userId) return { ok: false, workspaceId: null };
+
+  // Delete all user-owned stored data across tables (respecting foreign keys)
+  await Promise.allSettled([
+    supabase.from("reports").delete().eq("user_id", userId),
+    supabase.from("recent_searches").delete().eq("user_id", userId),
+    supabase.from("agent_conversations").delete().eq("user_id", userId),
+  ]);
+
+  await Promise.allSettled([
+    supabase.from("simulations").delete().eq("user_id", userId),
+    supabase.from("personas").delete().eq("user_id", userId),
+  ]);
+
+  // Reset user's workspaces back to a single clean empty workspace
+  let primaryWorkspaceId = null;
+  const { data: wsRows } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (Array.isArray(wsRows) && wsRows.length > 0) {
+    const primary = wsRows[0];
+    primaryWorkspaceId = primary.id;
+    const extraIds = wsRows.slice(1).map((w) => w.id);
+    if (extraIds.length > 0) {
+      await supabase
+        .from("workspaces")
+        .delete()
+        .eq("user_id", userId)
+        .in("id", extraIds);
+    }
+    await supabase
+      .from("workspaces")
+      .update({
+        name: "Clemir Workspace",
+        favorite_persona_ids: [],
+        deleted_builtin_persona_ids: [],
+      })
+      .eq("id", primary.id)
+      .eq("user_id", userId);
+  }
+
+  return { ok: true, workspaceId: primaryWorkspaceId };
 }
 
 

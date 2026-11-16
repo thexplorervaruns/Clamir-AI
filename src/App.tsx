@@ -46,11 +46,11 @@ import {
 import {
   BUILT_IN_PERSONAS,
   INITIAL_PLATFORM_CONFIG,
-  INITIAL_SAMPLE_SIMULATIONS,
   SIMULATION_TYPES_META,
 } from './data/seedData.ts';
 import { supabase } from './supabaseClient.js';
 import {
+  clearAllAccountDataInSupabase,
   clearAllConversationsInSupabase,
   clearRecentSearchesInSupabase,
   createWorkspaceInSupabase,
@@ -135,7 +135,7 @@ export default function App() {
   // Workspace Data State
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('ws-default');
-  const [simulations, setSimulations] = useState<Simulation[]>(INITIAL_SAMPLE_SIMULATIONS);
+  const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [personas, setPersonas] = useState<Persona[]>(BUILT_IN_PERSONAS);
   const [conversations, setConversations] = useState<AgentConversation[]>([]);
   const [reports, setReports] = useState<ReportArtifact[]>([]);
@@ -229,16 +229,10 @@ export default function App() {
             const filteredSupaSims = (supaData.simulations || []).filter(
               (s: Simulation) => !deletedSimIds.includes(s.id)
             );
-            if (filteredSupaSims.length > 0) {
-              setSimulations(filteredSupaSims);
-            }
+            setSimulations(filteredSupaSims);
             setPersonas(supaData.personas);
-            if (supaData.reports.length > 0) {
-              setReports(supaData.reports);
-            }
-            if (supaData.recentSearches.length > 0) {
-              setRecentSearches(supaData.recentSearches);
-            }
+            setReports(supaData.reports || []);
+            setRecentSearches(supaData.recentSearches || []);
           }
         }
 
@@ -716,6 +710,69 @@ export default function App() {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     fetchWorkspaceState(authToken, activeWorkspaceId);
+  };
+
+  const handleClearAllAccountData = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const uid = session?.user?.id || user?.id;
+    const liveToken = session?.access_token || authToken;
+
+    if (uid) {
+      await clearAllAccountDataInSupabase(uid).catch(() => ({ ok: false, workspaceId: null }));
+    }
+
+    let nextWorkspaces: Workspace[] = [];
+    if (liveToken) {
+      const res = await fetch('/api/account/data', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${liveToken}` },
+      }).catch(() => null);
+      if (res && res.ok) {
+        const data = await res.json().catch(() => null);
+        if (Array.isArray(data?.workspaces)) {
+          nextWorkspaces = data.workspaces;
+        }
+      }
+    }
+
+    // Remove all locally stored Clemir workspace data keys while keeping auth session intact
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('clemir_')) {
+          keysToRemove.push(key);
+        }
+      }
+      for (const key of keysToRemove) {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // Ignore storage failures
+    }
+
+    setSimulations([]);
+    setConversations([]);
+    setReports([]);
+    setRecentSearches([]);
+    setAdditionalContexts([createEmptyContextBox()]);
+    setSelectedSimId(null);
+    setCreatingSim(false);
+    setAgentFocusSimId(null);
+    setAgentFocusPersonaId(null);
+    setPersonas(BUILT_IN_PERSONAS.map((p) => ({ ...p, isFavorite: false })));
+
+    if (nextWorkspaces.length > 0) {
+      setWorkspaces(nextWorkspaces);
+      setActiveWorkspaceId(nextWorkspaces[0].id);
+      if (liveToken) {
+        await fetchWorkspaceState(liveToken, nextWorkspaces[0].id);
+      }
+    } else if (liveToken) {
+      await fetchWorkspaceState(liveToken, activeWorkspaceId);
+    }
   };
 
   // Prevent protected content from briefly appearing before authentication is checked
@@ -1196,11 +1253,6 @@ export default function App() {
                                     >
                                       {sim.name}
                                     </button>
-                                    {sim.isSample && (
-                                      <span className="ml-2 text-[10px] font-mono text-[#6B7280]">
-                                        · Sample
-                                      </span>
-                                    )}
                                   </td>
                                   <td className="py-3 px-4 text-[#6B7280]">
                                     {meta?.shortName || sim.type}
@@ -1481,6 +1533,7 @@ export default function App() {
                 onReportsChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                 onConfigUpdated={(cfg) => setPlatformConfig(cfg)}
                 onOpenSimulation={handleOpenSimulation}
+                onClearAllData={handleClearAllAccountData}
                 onLogout={handleLogout}
               />
             )}

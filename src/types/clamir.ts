@@ -271,7 +271,6 @@ export interface Simulation {
   startedAt: string;
   completedAt?: string;
   estimatedSecondsRemaining?: number | null;
-  isSample?: boolean;
   results?: SimulationResults;
 }
 

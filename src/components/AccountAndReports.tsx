@@ -38,6 +38,7 @@ interface AccountAndReportsProps {
   onReportsChanged: () => void;
   onConfigUpdated: (config: PlatformConfig) => void;
   onOpenSimulation: (simId: string) => void;
+  onClearAllData: () => Promise<void>;
   onLogout: () => void;
 }
 
@@ -54,6 +55,7 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
   onReportsChanged,
   onConfigUpdated,
   onOpenSimulation,
+  onClearAllData,
   onLogout,
 }) => {
   const [subTab, setSubTab] = useState<'profile' | 'reports' | 'activity' | 'owner'>(
@@ -65,6 +67,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
   const [profileEmail, setProfileEmail] = useState(() => user.email || '');
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [confirmClearData, setConfirmClearData] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
 
   useEffect(() => {
     setProfileName(normalizeConsistentUserName(user.name, user.email));
@@ -167,6 +171,20 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
     if (res.ok) {
       setConfirmDeleteReportId(null);
       onReportsChanged();
+    }
+  };
+
+  const handleConfirmClearAllData = async () => {
+    setClearingData(true);
+    setProfileMsg(null);
+    try {
+      await onClearAllData();
+      setConfirmClearData(false);
+      setProfileMsg('All stored account data has been permanently cleared.');
+    } catch {
+      setProfileMsg('Unable to clear all stored account data. Please try again.');
+    } finally {
+      setClearingData(false);
     }
   };
 
@@ -427,6 +445,25 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
             <div className="p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded text-[11px] text-[#6B7280]">
               Billing Notice: Plan upgrades in this environment update workspace quotas immediately without charging a card until a live payment provider is connected.
             </div>
+          </div>
+
+          {/* Clear Stored Account Data Card */}
+          <div className="lg:col-span-12 bg-white border border-[#E5E7EB] rounded-lg p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-2xl">
+              <h3 className="text-sm font-bold text-[#111827]">Clear Stored Account Data</h3>
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Permanently erase all stored data associated with your account, including simulations, exported reports, AI chat history, custom target audiences, additional context notes, and recent search activity. Your login credentials remain active.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={clearingData}
+              onClick={() => setConfirmClearData(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 disabled:opacity-50 shrink-0 self-start sm:self-center cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Data</span>
+            </button>
           </div>
         </div>
       )}
@@ -721,6 +758,38 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 cursor-pointer"
               >
                 Delete Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Stored Account Data Confirmation Modal */}
+      {confirmClearData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md bg-white border border-[#E5E7EB] rounded-lg p-6">
+            <h3 className="text-base font-bold text-[#111827]">
+              Permanently Clear All Stored Account Data?
+            </h3>
+            <p className="mt-2 text-xs text-[#6B7280] leading-relaxed">
+              This action cannot be undone. All simulations, saved reports, AI chat history, custom audiences, additional context boxes, extra workspaces, and recent activity stored under your account will be permanently deleted.
+            </p>
+            <div className="mt-5 flex justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={clearingData}
+                onClick={() => setConfirmClearData(false)}
+                className="px-4 py-2 text-xs font-medium text-[#111827] border border-[#E5E7EB] rounded-md hover:bg-[#F9FAFB] disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearingData}
+                onClick={handleConfirmClearAllData}
+                className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+              >
+                {clearingData ? 'Clearing Data...' : 'Permanently Clear Data'}
               </button>
             </div>
           </div>

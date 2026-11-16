@@ -15,6 +15,7 @@ import { exportSimulationReport } from '../utils/reportExporter.ts';
 import { SIMULATION_TYPES_META } from '../data/seedData.ts';
 import { supabase } from '../supabaseClient.js';
 import { saveReportToSupabase } from '../services/supabaseService.js';
+import { TimesFMForecastPanel } from './TimesFMForecastPanel.tsx';
 
 interface SimulationResultsViewProps {
   simulation: Simulation;
@@ -428,6 +429,13 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* INTEGRATED TIMESFM QUANTILE FORECAST ARCHITECTURE */}
+          <TimesFMForecastPanel
+            simulation={simulation}
+            authToken={authToken}
+            onSimulationUpdated={onUpdated}
+          />
 
           {/* A/B COMPARISON SECTION (When A/B Simulation or abComparison present) */}
           {res.abComparison && (

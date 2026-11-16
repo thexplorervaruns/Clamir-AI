@@ -116,7 +116,13 @@ function mergeConversationLists(
 }
 
 type AppView = 'landing' | 'auth' | 'workspace';
-type WorkspaceTab = 'dashboard' | 'simulations' | 'agent' | 'audience' | 'account' | 'owner';
+type WorkspaceTab =
+  | 'dashboard'
+  | 'simulations'
+  | 'agent'
+  | 'audience'
+  | 'account'
+  | 'owner';
 
 export default function App() {
   const [appView, setAppView] = useState<AppView>('landing');
@@ -878,7 +884,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setShowWorkspaceModal(true)}
-            className="px-2.5 py-1 text-xs font-medium text-[#111827] bg-[#F9FAFB] border border-[#E5E7EB] rounded-md truncate max-w-[130px]"
+            className="px-2.5 py-1 text-xs font-medium text-[#111827] bg-[#F9FAFB] border border-[#E5E7EB] rounded-md truncate max-w-[110px]"
           >
             {activeWorkspace.name}
           </button>
@@ -1096,8 +1102,7 @@ export default function App() {
 
         {/* CENTER WORKSPACE */}
         <main className="flex-1 min-w-0 flex flex-col justify-between overflow-y-auto">
-          <div className="p-4 sm:p-6 lg:p-8 space-y-6">
-
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 pb-20 md:pb-8">
             {/* TAB 1: DASHBOARD */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
@@ -1112,17 +1117,19 @@ export default function App() {
                         Welcome back, {displayUserName}
                       </h1>
                       <p className="text-xs sm:text-sm text-[#6B7280]">
-                        Simulate custom target audiences, collaborate with Clemir AI Agent, and export full research reports.
+                        Simulate target audiences, run embedded TimesFM forecasts, and collaborate with Clemir AI Agent.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setAgentDrawerOpen(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 transition-colors cursor-pointer self-start sm:self-center whitespace-nowrap shrink-0"
-                    >
-                      <Bot className="w-4 h-4" />
-                      <span>Ask Clemir AI</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => setAgentDrawerOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <Bot className="w-4 h-4" />
+                        <span>Ask Clemir AI</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* 4 KPI Cards */}
@@ -1670,18 +1677,6 @@ export default function App() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* Quick Integrated AI Agent Launcher (available on non-Agent views on desktop) */}
-      {activeTab !== 'agent' && !agentDrawerOpen && (
-        <button
-          type="button"
-          onClick={() => setAgentDrawerOpen(true)}
-          className="hidden md:inline-flex fixed bottom-5 right-5 z-40 items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-[#000000] rounded-md shadow-sm hover:bg-neutral-800 transition-colors cursor-pointer"
-        >
-          <Bot className="w-4 h-4" />
-          <span>Clemir AI Agent</span>
-        </button>
       )}
 
       {/* Integrated AI Agent Slide-Over Drawer */}

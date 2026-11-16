@@ -68,6 +68,20 @@ export function exportSimulationReport(
           ''
         );
       }
+      if (res.timesfmForecast) {
+        const fc = res.timesfmForecast;
+        lines.push(
+          '--- EMBEDDED TIMESFM QUANTILE FORECAST ---',
+          `Metric: ${fc.seriesName} ${fc.unitLabel ? `(${fc.unitLabel})` : ''}`,
+          `Observations: ${fc.observationCount} actuals -> +${fc.horizon} ${fc.frequency} steps`,
+          `Holdout Model: ${fc.backtest.selectedModel} | MAPE: ${fc.backtest.mape}% | MAE: ${fc.backtest.mae} | RMSE: ${fc.backtest.rmse} | Directional Acc: ${fc.backtest.directionalAccuracy}%`,
+          `Latest Observed: ${fc.summaryStats.lastValue} -> Projected End P50: ${fc.summaryStats.projectedEndP50} (${fc.summaryStats.projectedChangePct >= 0 ? '+' : ''}${fc.summaryStats.projectedChangePct}%)`,
+          ...fc.forecast.map(
+            (pt) => `  +${pt.step} (${pt.label}): P10=${pt.p10} | P50=${pt.p50} | P90=${pt.p90}`
+          ),
+          ''
+        );
+      }
       lines.push('--- RECOMMENDATIONS ---');
       for (const rec of res.recommendations) {
         lines.push(
@@ -213,11 +227,36 @@ export function exportSimulationReport(
     doc.rect(margin + posW + neuW, y, negW, 10, 'F');
     y += 28;
 
+    if (res.timesfmForecast) {
+      const fc = res.timesfmForecast;
+      ensureSpace(95);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.text('3. Embedded TimesFM Quantitative Forecast', margin, y);
+      y += 15;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      const fcSummary = doc.splitTextToSize(
+        `Metric: ${fc.seriesName} (${fc.observationCount} pts -> +${fc.horizon} ${fc.frequency}) | Model: ${fc.backtest.selectedModel} | Holdout MAPE: ${fc.backtest.mape}% | End P50: ${fc.summaryStats.projectedEndP50} (${fc.summaryStats.projectedChangePct >= 0 ? '+' : ''}${fc.summaryStats.projectedChangePct}%)`,
+        maxWidth
+      );
+      doc.text(fcSummary, margin, y);
+      y += fcSummary.length * 13 + 6;
+
+      if (fc.reasoning?.available && fc.reasoning.executiveSummary) {
+        const fcReasonLines = doc.splitTextToSize(fc.reasoning.executiveSummary, maxWidth);
+        doc.text(fcReasonLines, margin, y);
+        y += fcReasonLines.length * 13 + 8;
+      }
+      y += 6;
+    }
+
     // Persona Breakdown
     ensureSpace(80);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text('3. Simulated Persona Breakdown', margin, y);
+    doc.text('4. Simulated Persona Breakdown', margin, y);
     y += 16;
 
     for (const pb of res.personaBreakdown) {
@@ -248,7 +287,7 @@ export function exportSimulationReport(
     ensureSpace(80);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.text('4. Prioritized Recommendations', margin, y);
+    doc.text('5. Prioritized Recommendations', margin, y);
     y += 16;
 
     for (const rec of res.recommendations) {

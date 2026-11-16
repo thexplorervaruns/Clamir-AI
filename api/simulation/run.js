@@ -1,5 +1,9 @@
 import { callOpenRouterChat, cleanNaturalAssistantText } from "../ai/generate.js";
 import { performRealTimeWebResearch } from "../research/search.js";
+import {
+  executeEmbeddedTimesFMForecast,
+  parseTimeSeriesInput,
+} from "../forecast/run.js";
 
 /**
  * Step 1: Understand the simulation and extract targeted web research queries
@@ -53,7 +57,13 @@ export function buildSimulationResearchPlan(sim) {
  * Deterministic multi-attribute utility calculation when OpenRouter is unavailable or out of credits,
  * preserving 100% of the real-time Firecrawl/Spider web research sources and explicit formulas.
  */
-function buildDeterministicEvidenceSynthesis(sim, personaList, webResearch, openRouterErrorNote) {
+function buildDeterministicEvidenceSynthesis(
+  sim,
+  personaList,
+  webResearch,
+  openRouterErrorNote,
+  timesfmForecast = null
+) {
   const sources = Array.isArray(webResearch?.sources) ? webResearch.sources : [];
   const selected = Array.isArray(sim?.selectedPersonas) ? sim.selectedPersonas : [];
 
@@ -191,6 +201,16 @@ function buildDeterministicEvidenceSynthesis(sim, personaList, webResearch, open
         webResearch?.executedAt || new Date().toISOString()
       })`,
     },
+    ...(timesfmForecast
+      ? [
+          {
+            metric: `TimesFM Projected End P50 (${timesfmForecast.seriesName})`,
+            formula: `${timesfmForecast.backtest.selectedModel} (Patch=${timesfmForecast.patchLength}, Seasonal=${timesfmForecast.seasonalPeriod})`,
+            inputs: `${timesfmForecast.observationCount} observed points -> +${timesfmForecast.horizon} ${timesfmForecast.frequency} steps; Holdout MAPE=${timesfmForecast.backtest.mape}%`,
+            output: `P50=${timesfmForecast.summaryStats.projectedEndP50} ${timesfmForecast.unitLabel || ""} (${timesfmForecast.summaryStats.projectedChangePct >= 0 ? "+" : ""}${timesfmForecast.summaryStats.projectedChangePct}% vs latest; P10..P90: ${timesfmForecast.forecast[timesfmForecast.forecast.length - 1]?.p10} to ${timesfmForecast.forecast[timesfmForecast.forecast.length - 1]?.p90})`,
+          },
+        ]
+      : []),
   ];
 
   return {
@@ -402,6 +422,54 @@ export async function executeEvidenceBasedSimulation(params = {}) {
     .map((m) => `${m.name} (${m.kind}): ${String(m.extractedContent || "").slice(0, 800)}`)
     .join("\n");
 
+  // STEP 3B: Core TimesFM Time-Series Forecasting Architecture (from sim.forecastConfig or CSV/JSON materials)
+  let timesfmForecast = null;
+  const fcCfg = sim.forecastConfig || {};
+  let rawForecastData = fcCfg.rawData || "";
+  const explicitPoints = Array.isArray(fcCfg.points) ? fcCfg.points : [];
+
+  if (
+    (!rawForecastData || !String(rawForecastData).trim()) &&
+    explicitPoints.length < 6 &&
+    Array.isArray(sim.materials)
+  ) {
+    for (const mat of sim.materials) {
+      if (mat?.extractedContent) {
+        const candidatePts = parseTimeSeriesInput(mat.extractedContent, []);
+        if (candidatePts.length >= 6) {
+          rawForecastData = mat.extractedContent;
+          break;
+        }
+      }
+    }
+  }
+
+  if (
+    (rawForecastData && String(rawForecastData).trim()) ||
+    explicitPoints.length >= 6
+  ) {
+    const fcRes = await executeEmbeddedTimesFMForecast({
+      seriesName:
+        (fcCfg.seriesName && String(fcCfg.seriesName).trim()) ||
+        `${sim.name || "Simulation"} Core Metric`,
+      unitLabel: fcCfg.unitLabel || "",
+      frequency: fcCfg.frequency || "monthly",
+      horizon: fcCfg.horizon || 12,
+      patchLength: fcCfg.patchLength || "auto",
+      seasonalPeriod: fcCfg.seasonalPeriod || "auto",
+      domainContext: [sim.researchContext, sim.hypothesis, sim.targetAudience]
+        .filter(Boolean)
+        .join(" | "),
+      rawData: rawForecastData,
+      points: explicitPoints,
+      existingWebResearch: webResearch,
+    }).catch(() => null);
+
+    if (fcRes?.ok && fcRes.result) {
+      timesfmForecast = fcRes.result;
+    }
+  }
+
   // STEP 4: Generating results via OpenRouter (google/gemini-2.5-flash)
   await notifyStage("Generating results", 88, 2);
 
@@ -441,6 +509,11 @@ Queries Executed: ${researchPlan.extractedQueries.join(" | ")}
 Total Sources Retrieved: ${webResearch.sources.length}
 ${formattedSourcesForPrompt}
 
+${
+  timesfmForecast
+    ? `\n=== 5. EMBEDDED TIMESFM FORECAST ENGINE OUTPUT ===\nMetric: ${timesfmForecast.seriesName} (${timesfmForecast.observationCount} historical points -> +${timesfmForecast.horizon} ${timesfmForecast.frequency} steps)\nBacktest Holdout: Model="${timesfmForecast.backtest.selectedModel}", MAE=${timesfmForecast.backtest.mae}, RMSE=${timesfmForecast.backtest.rmse}, MAPE=${timesfmForecast.backtest.mape}%, Directional Accuracy=${timesfmForecast.backtest.directionalAccuracy}%\nLatest Observed=${timesfmForecast.summaryStats.lastValue}, Projected End P50=${timesfmForecast.summaryStats.projectedEndP50} (${timesfmForecast.summaryStats.projectedChangePct}%), P10=${timesfmForecast.forecast[timesfmForecast.forecast.length - 1]?.p10}, P90=${timesfmForecast.forecast[timesfmForecast.forecast.length - 1]?.p90}\nIncorporate this quantitative forecast trajectory directly into persona reactions, risks, and recommendations.\n`
+    : ""
+}
 === REQUIRED JSON OUTPUT STRUCTURE ===
 Return a JSON object with these exact top-level keys:
 - executiveSummary: { mainFinding, overallReaction, importantOpportunities: [], mainConcerns: [] }
@@ -476,7 +549,8 @@ Return a JSON object with these exact top-level keys:
       sim,
       allPersonas,
       webResearch,
-      openRouterErrorNote
+      openRouterErrorNote,
+      timesfmForecast
     );
   }
 
@@ -520,6 +594,7 @@ Return a JSON object with these exact top-level keys:
         },
     structuredSimulationReport: structuredReportObj,
     structuredReport: structuredReportObj,
+    timesfmForecast: timesfmForecast || undefined,
     sentimentOverview: parsed.sentimentOverview || {
       positive: 60,
       neutral: 25,

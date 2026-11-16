@@ -66,6 +66,21 @@
       "token": "80c4949e85fe7840bdb5741b358742c4ed9982733a4ff9ad",
       "userId": "user-owner-1",
       "createdAt": "2026-11-16T00:55:33.994Z"
+    },
+    {
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImM0MDNiYTNjLTJmZDctNDZiMy1iZTZlLWFmM2NlOGQ1NzBhOSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3ZmcmtpdWdxZW92ZXFlZGl6ZmdrLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzk0ODM5NDgzLCJpYXQiOjE3OTQ4MzU4ODMsImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc5NDc0NjEwNX1dLCJzZXNzaW9uX2lkIjoiOWQ0OTBjNDEtZDA4NC00M2FkLWI1ZDUtYzEyZTc3ODI0NjJkIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.xYZIWKUcetz_RIQeEJse401tqbbM9OMcHHFhcAxrAG3F7AXWxTAB6azdHESsNCAflHNjr8EZnCQYj05E5bc7OQ",
+      "userId": "user-1794743591865",
+      "createdAt": "2026-11-16T14:22:47.014Z"
+    },
+    {
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImM0MDNiYTNjLTJmZDctNDZiMy1iZTZlLWFmM2NlOGQ1NzBhOSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3ZmcmtpdWdxZW92ZXFlZGl6ZmdrLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzk0ODQyOTgyLCJpYXQiOjE3OTQ4MzkzODIsImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc5NDc0NjEwNX1dLCJzZXNzaW9uX2lkIjoiOWQ0OTBjNDEtZDA4NC00M2FkLWI1ZDUtYzEyZTc3ODI0NjJkIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.F5PdRs-iR5i8BWHIEL71mtES_BKc0QzSPTOBAynk5s4D9E_HmxuoglhKxTXcVvFlffOYhDEGpzvvjIj2-nxQUQ",
+      "userId": "user-1794743591865",
+      "createdAt": "2026-11-16T14:31:21.335Z"
+    },
+    {
+      "token": "b0a2b63ad317943568f5e041ce3d709099764e5ef085e039",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T14:31:39.316Z"
     }
   ],
   "workspaces": [
@@ -91,7 +106,16 @@
   "simulations": [],
   "conversations": [],
   "reports": [],
-  "recentSearches": [],
+  "recentSearches": [
+    {
+      "id": "rs-1794839499348",
+      "workspaceId": "ws-default",
+      "query": "Verify Embedded TimesFM Integration",
+      "category": "Simulation",
+      "targetId": "899917f2-7e31-4ad7-b99c-9441b8985d73",
+      "timestamp": "2026-11-16T14:31:39.348Z"
+    }
+  ],
   "platformConfig": {
     "pricingPlans": [
       {

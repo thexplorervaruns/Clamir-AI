@@ -9,6 +9,7 @@ import {
   Play,
   Plus,
   Trash2,
+  TrendingUp,
   Upload,
   Users,
   X,
@@ -17,12 +18,14 @@ import {
   CustomFieldType,
   CustomFormField,
   DecisionSpeed,
+  ForecastFrequency,
   Persona,
   PriceSensitivity,
   PricingTierOption,
   QuestionType,
   ResearchMaterialItem,
   SelectedPersonaConfig,
+  SimulationForecastConfig,
   SimulationQuestion,
   SimulationTypeId,
 } from '../types/clamir.ts';
@@ -115,10 +118,19 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     },
   ]);
 
-  // Step 2: Research Material
+  // Step 2: Research Material & Integrated TimesFM Forecast Architecture
   const [materials, setMaterials] = useState<ResearchMaterialItem[]>([]);
   const [urlInput, setUrlInput] = useState('');
   const [extractingUrl, setExtractingUrl] = useState(false);
+
+  const [fcEnabled, setFcEnabled] = useState(false);
+  const [fcSeriesName, setFcSeriesName] = useState('');
+  const [fcUnitLabel, setFcUnitLabel] = useState('');
+  const [fcFrequency, setFcFrequency] = useState<ForecastFrequency>('monthly');
+  const [fcHorizon, setFcHorizon] = useState<number>(12);
+  const [fcPatchLength, setFcPatchLength] = useState<string>('auto');
+  const [fcSeasonalPeriod, setFcSeasonalPeriod] = useState<string>('auto');
+  const [fcRawData, setFcRawData] = useState<string>('');
 
   // Step 3: Question Battery — Starts with a blank question, no prewritten text
   const [questions, setQuestions] = useState<SimulationQuestion[]>([
@@ -279,6 +291,18 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           addedAt: new Date().toISOString(),
         },
       ]);
+
+      // If user uploads a CSV/JSON series and hasn't filled the TimesFM input yet, attach it cleanly
+      if (['csv', 'json', 'tsv'].includes(ext) && !fcRawData.trim()) {
+        const numericMatches = extractedText.match(/-?\d+(?:\.\d+)?/g);
+        if (numericMatches && numericMatches.length >= 6) {
+          setFcRawData(extractedText.slice(0, 8000));
+          setFcEnabled(true);
+          if (!fcSeriesName.trim()) {
+            setFcSeriesName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' '));
+          }
+        }
+      }
     }
     e.target.value = '';
   };
@@ -491,6 +515,19 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           materials,
           questions,
           selectedPersonas: effectivePersonas,
+          forecastConfig:
+            fcEnabled || fcRawData.trim()
+              ? ({
+                  enabled: true,
+                  seriesName: fcSeriesName.trim() || `${name.trim()} Core Metric`,
+                  unitLabel: fcUnitLabel.trim(),
+                  frequency: fcFrequency,
+                  horizon: fcHorizon,
+                  patchLength: fcPatchLength,
+                  seasonalPeriod: fcSeasonalPeriod,
+                  rawData: fcRawData,
+                } satisfies SimulationForecastConfig)
+              : undefined,
         }),
       });
       const data = await res.json();
@@ -1329,6 +1366,138 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               </div>
             )}
           </div>
+
+          {/* Integrated TimesFM Quantile Forecasting Engine Stage */}
+          <div className="pt-5 border-t border-[#E5E7EB] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-[#111827] flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>TimesFM Quantitative Forecasting Architecture (Optional)</span>
+                </h3>
+                <p className="text-xs text-[#6B7280] mt-0.5">
+                  Attach historical time-series observations (min 6 points) to run patched quantile P10/P50/P90 projections alongside persona simulation and live web research.
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 text-xs font-semibold text-[#111827] cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={fcEnabled}
+                  onChange={(e) => setFcEnabled(e.target.checked)}
+                  className="accent-[#000000] rounded"
+                />
+                <span>Include TimesFM Stage</span>
+              </label>
+            </div>
+
+            {fcEnabled && (
+              <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                      Forecast Metric Name
+                    </label>
+                    <input
+                      type="text"
+                      value={fcSeriesName}
+                      onChange={(e) => setFcSeriesName(e.target.value)}
+                      placeholder="e.g., Monthly Revenue or Active Users"
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                      Unit Label
+                    </label>
+                    <input
+                      type="text"
+                      value={fcUnitLabel}
+                      onChange={(e) => setFcUnitLabel(e.target.value)}
+                      placeholder="e.g., USD, users, %"
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                      Frequency
+                    </label>
+                    <select
+                      value={fcFrequency}
+                      onChange={(e) => setFcFrequency(e.target.value as ForecastFrequency)}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="quarterly">Quarterly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                      Horizon: <span className="font-mono tabular-nums">{fcHorizon} steps</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={2}
+                      max={36}
+                      value={fcHorizon}
+                      onChange={(e) => setFcHorizon(Number(e.target.value))}
+                      className="w-full accent-[#000000] cursor-pointer mt-1.5"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                      Input Patch Length
+                    </label>
+                    <select
+                      value={fcPatchLength}
+                      onChange={(e) => setFcPatchLength(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                    >
+                      <option value="auto">Auto (Adaptive)</option>
+                      <option value="2">2 steps / patch</option>
+                      <option value="4">4 steps / patch</option>
+                      <option value="8">8 steps / patch</option>
+                      <option value="12">12 steps / patch</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                      Seasonal Period
+                    </label>
+                    <select
+                      value={fcSeasonalPeriod}
+                      onChange={(e) => setFcSeasonalPeriod(e.target.value)}
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                    >
+                      <option value="auto">Auto-Detect (ACF)</option>
+                      <option value="1">None (1)</option>
+                      <option value="4">Quarterly / Monthly (4)</option>
+                      <option value="7">Weekly Cycle (7)</option>
+                      <option value="12">Annual Cycle (12)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#111827] mb-1">
+                    Historical Observations (CSV, JSON, or comma-separated values)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={fcRawData}
+                    onChange={(e) => setFcRawData(e.target.value)}
+                    placeholder={`Paste date,value rows or JSON array (min 6 numeric points).\nExample format:\n2025-07, 41200\n2025-08, 42850\n2025-09, 44100\n2025-10, 46900\n2025-11, 48300\n2025-12, 51200`}
+                    className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1657,6 +1826,14 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               <p>
                 <span className="text-[#6B7280]">Question Battery:</span>{' '}
                 <strong className="font-mono tabular-nums">{questions.length} structured questions</strong>
+              </p>
+              <p>
+                <span className="text-[#6B7280]">TimesFM Forecast Stage:</span>{' '}
+                <strong className="font-mono tabular-nums">
+                  {fcEnabled || fcRawData.trim()
+                    ? `Enabled (+${fcHorizon} ${fcFrequency} steps · Patch=${fcPatchLength})`
+                    : 'Optional (can be attached after simulation runs)'}
+                </strong>
               </p>
             </div>
           </div>

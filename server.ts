@@ -21,14 +21,20 @@ import {
   handleSimulationRunRequest,
 } from './api/simulation/run.js';
 import {
+  executeEmbeddedTimesFMForecast,
+  handleForecastRunRequest,
+} from './api/forecast/run.js';
+import {
   AgentConversation,
   AgentSourceCitation,
+  ForecastFrequency,
   Persona,
   PlatformConfig,
   RecentSearchItem,
   ReportArtifact,
   Simulation,
   SimulationResults,
+  TimesFMForecastResult,
   UserProfile,
   Workspace,
 } from './src/types/clamir.ts';
@@ -644,10 +650,11 @@ async function startServer() {
     createdAt: u.createdAt,
   });
 
-  // Dedicated Modular AI, Web Research, and Simulation Endpoints
+  // Dedicated Modular AI, Web Research, Simulation, and Forecasting Endpoints
   app.post('/api/ai/generate', handleAiGenerateRequest);
   app.post('/api/research/search', handleResearchSearchRequest);
   app.post('/api/simulation/run', handleSimulationRunRequest);
+  app.post('/api/forecast/run', handleForecastRunRequest);
 
   // Register/Sync Supabase Auth Session with Backend
   app.post('/api/auth/supabase-session', (req, res) => {
@@ -1018,6 +1025,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       materials: Array.isArray(body.materials) ? body.materials : [],
       questions: Array.isArray(body.questions) ? body.questions : [],
       selectedPersonas: Array.isArray(body.selectedPersonas) ? body.selectedPersonas : [],
+      forecastConfig: body.forecastConfig || undefined,
       status: 'Active',
       stage: 'Queued',
       progress: 8,
@@ -1079,6 +1087,105 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       saveDatabase(db);
     }
     res.json({ ok: true });
+  });
+
+  // Attach or re-run embedded TimesFM Forecast inside an existing simulation
+  app.post('/api/simulations/:id/forecast', requireAuth, async (req: AuthedRequest, res) => {
+    const sim = db.simulations.find((s) => s.id === req.params.id);
+    if (!sim) {
+      res.status(404).json({ error: 'Simulation not found.' });
+      return;
+    }
+
+    try {
+      const b = req.body || {};
+      const existingCfg = sim.forecastConfig || {
+        enabled: true,
+        frequency: 'monthly' as const,
+        horizon: 12,
+        patchLength: 'auto',
+        seasonalPeriod: 'auto',
+      };
+
+      const seriesName =
+        String(b.seriesName ?? existingCfg.seriesName ?? `${sim.name} Core Metric`).trim() ||
+        `${sim.name} Core Metric`;
+      const unitLabel = String(b.unitLabel ?? existingCfg.unitLabel ?? '').trim();
+      const rawFreq = String(b.frequency || existingCfg.frequency || 'monthly');
+      const frequency: ForecastFrequency = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'].includes(
+        rawFreq
+      )
+        ? (rawFreq as ForecastFrequency)
+        : 'monthly';
+      const horizon = Math.max(2, Math.min(48, Number(b.horizon ?? existingCfg.horizon ?? 12)));
+      const patchLength = b.patchLength ?? existingCfg.patchLength ?? 'auto';
+      const seasonalPeriod = b.seasonalPeriod ?? existingCfg.seasonalPeriod ?? 'auto';
+      const rawData = b.rawData !== undefined ? String(b.rawData) : existingCfg.rawData || '';
+      const points = Array.isArray(b.points) ? b.points : existingCfg.points || [];
+
+      const simSources = sim.results?.structuredSimulationReport?.sourcesAndReferences || [];
+      const existingWebResearch =
+        simSources.length > 0
+          ? {
+              queriesExecuted: sim.results?.structuredSimulationReport?.researchDiagnostics?.queriesExecuted || [],
+              sources: simSources,
+            }
+          : null;
+
+      const execRes = await executeEmbeddedTimesFMForecast({
+        seriesName,
+        unitLabel,
+        frequency,
+        horizon,
+        patchLength,
+        seasonalPeriod,
+        domainContext: [sim.researchContext, sim.hypothesis, sim.targetAudience]
+          .filter(Boolean)
+          .join(' | '),
+        rawData,
+        points,
+        enableWebSearch: b.enableWebSearch !== false,
+        existingWebResearch: existingWebResearch as any,
+      });
+
+      if (!execRes.ok || !execRes.result) {
+        res.status(400).json({
+          ok: false,
+          error: `Please provide at least 6 valid numeric historical observations (detected ${execRes.detectedCount}).`,
+        });
+        return;
+      }
+
+      sim.forecastConfig = {
+        enabled: true,
+        seriesName,
+        unitLabel,
+        frequency,
+        horizon,
+        patchLength,
+        seasonalPeriod,
+        rawData,
+        points,
+      };
+
+      if (sim.results) {
+        sim.results = {
+          ...sim.results,
+          timesfmForecast: execRes.result as unknown as TimesFMForecastResult,
+        };
+      }
+
+      saveDatabase(db);
+      res.json({ ok: true, simulation: sim });
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Unable to execute embedded TimesFM forecast.',
+      });
+    }
   });
 
   // Personas & Custom Persona CRUD

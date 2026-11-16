@@ -187,7 +187,23 @@ export interface StructuredSimulationReport {
     provider?: string;
     excerpt?: string;
   }[];
+  researchDiagnostics?: {
+    queriesExecuted?: string[];
+    [key: string]: unknown;
+  };
   finalConclusion?: string;
+}
+
+export interface SimulationForecastConfig {
+  enabled: boolean;
+  seriesName?: string;
+  unitLabel?: string;
+  frequency: ForecastFrequency;
+  horizon: number;
+  patchLength: string | number;
+  seasonalPeriod: string | number;
+  rawData?: string;
+  points?: TimeSeriesPointInput[];
 }
 
 export interface SimulationResults {
@@ -195,6 +211,7 @@ export interface SimulationResults {
   aiEngineMode: 'openrouter-gemini-2.5-flash' | 'openrouter-live' | 'simulated-engine';
   generatedAt: string;
   structuredSimulationReport?: StructuredSimulationReport;
+  timesfmForecast?: TimesFMForecastResult;
   executiveSummary: {
     mainFinding: string;
     overallReaction: string;
@@ -265,6 +282,7 @@ export interface Simulation {
   materials: ResearchMaterialItem[];
   questions: SimulationQuestion[];
   selectedPersonas: SelectedPersonaConfig[];
+  forecastConfig?: SimulationForecastConfig;
   status: 'Active' | 'Completed' | 'Stopped' | 'Failed';
   stage: SimulationStage;
   progress: number; // 0 to 100
@@ -362,3 +380,109 @@ export interface PlatformConfig {
   defaultAgentsPerPersona: number;
   updatedAt: string;
 }
+
+export type ForecastFrequency = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+
+export interface TimeSeriesPointInput {
+  label: string;
+  value: number;
+}
+
+export interface ForecastHistoricalPoint {
+  index: number;
+  label: string;
+  actual: number;
+  fitted: number;
+  trend: number;
+  seasonal: number;
+  residual: number;
+}
+
+export interface ForecastFuturePoint {
+  step: number;
+  label: string;
+  p10: number;
+  p50: number;
+  p90: number;
+  trendComponent: number;
+  seasonalComponent: number;
+}
+
+export interface ForecastPatchToken {
+  patchIndex: number;
+  startLabel: string;
+  endLabel: string;
+  count: number;
+  mean: number;
+  slope: number;
+  volatility: number;
+}
+
+export interface ForecastBacktestMetrics {
+  holdoutSize: number;
+  selectedModel: string;
+  mae: number;
+  rmse: number;
+  mape: number;
+  smape: number;
+  directionalAccuracy: number;
+  modelWeights: {
+    model: string;
+    holdoutRmse: number;
+    weight: number;
+  }[];
+}
+
+export interface ForecastWebSource {
+  title: string;
+  url: string;
+  publishedDate?: string | null;
+  authorityTier?: string;
+  provider?: string;
+  excerpt: string;
+}
+
+export interface ForecastReasoningResult {
+  available: boolean;
+  modelUsed?: string;
+  error?: string;
+  executiveSummary: string;
+  trendAndPatchAnalysis: string;
+  webDriverSynthesis: string;
+  upsideAndDownsideScenarios: string;
+  confidenceAndCaveats: string;
+}
+
+export interface TimesFMForecastResult {
+  id: string;
+  createdAt: string;
+  seriesName: string;
+  unitLabel: string;
+  frequency: ForecastFrequency;
+  horizon: number;
+  patchLength: number;
+  seasonalPeriod: number;
+  observationCount: number;
+  summaryStats: {
+    min: number;
+    max: number;
+    mean: number;
+    stdDev: number;
+    lastValue: number;
+    projectedEndP50: number;
+    projectedChangePct: number;
+    slopePerStep: number;
+  };
+  historical: ForecastHistoricalPoint[];
+  forecast: ForecastFuturePoint[];
+  patches: ForecastPatchToken[];
+  backtest: ForecastBacktestMetrics;
+  webResearch: {
+    executed: boolean;
+    queriesExecuted: string[];
+    totalSourcesRetrieved: number;
+    sources: ForecastWebSource[];
+  };
+  reasoning: ForecastReasoningResult;
+}
+

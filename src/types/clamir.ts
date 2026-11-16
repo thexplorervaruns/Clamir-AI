@@ -317,6 +317,12 @@ export interface AgentMessage {
   personaContextName?: string;
 }
 
+export interface AdditionalContextBox {
+  id: string;
+  title: string;
+  content: string;
+}
+
 export interface AgentConversation {
   id: string;
   workspaceId: string;

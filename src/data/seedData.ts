@@ -537,7 +537,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
   {
     id: 'sim-sample-pricing-01',
     workspaceId: 'ws-default',
-    name: 'Clamir Studio Pro — Usage vs. Seat Pricing Analysis',
+    name: 'Clemir Studio Pro — Usage vs. Seat Pricing Analysis',
     type: 'pricing_analysis',
     description:
       'Evaluating customer response to a three-tier SaaS pricing model ($0 Starter, $149 Growth flat-rate, Custom Enterprise) versus per-seat billing for a B2B product analytics workflow.',
@@ -582,7 +582,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
         fileType: 'MD',
         sizeBytes: 4280,
         extractedContent:
-          'Competitor benchmark shows legacy research panels charge $2,500+ per study with 2-week turnaround. Flat-rate $149/mo unlimited simulation model positions Clamir as an everyday decision tool.',
+          'Competitor benchmark shows legacy research panels charge $2,500+ per study with 2-week turnaround. Flat-rate $149/mo unlimited simulation model positions Clemir as an everyday decision tool.',
         addedAt: '2026-11-12T10:15:00Z',
       },
     ],
@@ -624,7 +624,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
     isSample: true,
     results: {
       simulationNotice:
-        'SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.',
+        'SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clemir Engine and do not represent actual human survey respondents.',
       aiEngineMode: 'simulated-engine',
       generatedAt: '2026-11-12T10:21:15Z',
       executiveSummary: {
@@ -876,7 +876,7 @@ export const INITIAL_SAMPLE_SIMULATIONS: Simulation[] = [
     isSample: true,
     results: {
       simulationNotice:
-        'SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.',
+        'SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clemir Engine and do not represent actual human survey respondents.',
       aiEngineMode: 'simulated-engine',
       generatedAt: '2026-11-13T14:01:10Z',
       executiveSummary: {

@@ -1568,7 +1568,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           <div className="pb-4 border-b border-[#E5E7EB]">
             <h2 className="text-base font-bold text-[#111827]">Step 5 — Review and Run Simulation</h2>
             <p className="text-xs text-[#6B7280] mt-0.5">
-              Verify your simulation parameters, custom target audiences, and context before dispatching to the Clamir AI Engine.
+              Verify your simulation parameters, custom target audiences, and context before dispatching to the Clemir AI Engine.
             </p>
           </div>
 
@@ -1616,7 +1616,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           </div>
 
           <div className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-md text-xs text-[#6B7280]">
-            <strong>Transparency Notice:</strong> Clamir AI generates simulated customer persona responses for decision support and hypothesis testing. Outputs will be clearly labeled as AI-generated simulations.
+            <strong>Transparency Notice:</strong> Clemir AI generates simulated customer persona responses for decision support and hypothesis testing. Outputs will be clearly labeled as AI-generated simulations.
           </div>
         </div>
       )}

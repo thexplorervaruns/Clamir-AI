@@ -74,6 +74,7 @@ export async function searchWithFirecrawl(query, limit = 5) {
         limit,
         scrapeOptions: {
           formats: ["markdown"],
+          onlyMainContent: true,
         },
       }),
     });
@@ -120,6 +121,9 @@ export async function searchWithFirecrawl(query, limit = 5) {
             null,
           authorityTier: scoreAuthority(url),
           excerpt: String(rawText)
+            .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+            .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1")
+            .replace(/#{1,6}\s+/g, "")
             .replace(/\s+/g, " ")
             .trim()
             .slice(0, 1400),
@@ -167,6 +171,7 @@ export async function scrapeUrlWithFirecrawl(targetUrl) {
       body: JSON.stringify({
         url: targetUrl,
         formats: ["markdown"],
+        onlyMainContent: true,
       }),
     });
     clearTimeout(timeout);
@@ -281,14 +286,194 @@ export async function searchWithSpider(query, limit = 4) {
 }
 
 /**
- * Performs multi-query real-time web research using Firecrawl and Spider,
- * deduplicates sources, prioritizes authoritative domains, and produces
+ * Lightweight HTML/entity stripper for public web fallback extraction.
+ */
+function stripHtmlEntities(text = "") {
+  return String(text || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Fallback real-time public web search using DuckDuckGo and Wikipedia APIs
+ * so live web research remains functional in any hosted browser/server environment
+ * even when paid crawler keys are unconfigured or rate-limited.
+ */
+export async function searchWithPublicWeb(query, limit = 5) {
+  const cleanQuery = String(query || "").trim();
+  if (!cleanQuery) {
+    return { provider: "Public Web", ok: false, sources: [], error: "Empty query" };
+  }
+
+  const sources = [];
+
+  // 1. DuckDuckGo HTML search + Instant Answer API in parallel
+  const ddgHtmlPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; ClemirAI-Research/1.0)",
+          Accept: "text/html",
+        },
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return [];
+      const html = await res.text();
+
+      const extracted = [];
+      const resultBlocks = html.split(/class="result__body"/g).slice(1, limit + 2);
+      for (const block of resultBlocks) {
+        const linkMatch = block.match(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+        const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/i);
+        if (!linkMatch) continue;
+        let targetUrl = linkMatch[1] || "";
+        const uddgMatch = targetUrl.match(/[?&]uddg=([^&]+)/);
+        if (uddgMatch) {
+          try {
+            targetUrl = decodeURIComponent(uddgMatch[1]);
+          } catch {
+            // keep original
+          }
+        }
+        if (targetUrl.startsWith("//")) {
+          targetUrl = `https:${targetUrl}`;
+        }
+        if (!/^https?:\/\//i.test(targetUrl)) continue;
+        const title = stripHtmlEntities(linkMatch[2]);
+        const excerpt = stripHtmlEntities(snippetMatch ? snippetMatch[1] : "");
+        if (!title || !excerpt) continue;
+
+        extracted.push({
+          provider: "Web Search",
+          title,
+          url: targetUrl,
+          publishedDate: null,
+          authorityTier: scoreAuthority(targetUrl),
+          excerpt: excerpt.slice(0, 1200),
+          retrievedAt: new Date().toISOString(),
+        });
+      }
+      return extracted;
+    } catch {
+      return [];
+    }
+  })();
+
+  const wikiPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
+      const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+        cleanQuery
+      )}&srlimit=3&format=json&origin=*`;
+      const res = await fetch(url, {
+        signal: controller.signal,
+        headers: { "User-Agent": "ClemirAI-Research/1.0" },
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => ({}));
+      const items = Array.isArray(data?.query?.search) ? data.query.search : [];
+      return items
+        .map((item) => {
+          const title = String(item.title || "").trim();
+          const excerpt = stripHtmlEntities(item.snippet || "");
+          if (!title || !excerpt) return null;
+          const articleUrl = `https://en.wikipedia.org/wiki/${encodeURIComponent(
+            title.replace(/\s+/g, "_")
+          )}`;
+          return {
+            provider: "Wikipedia Reference",
+            title: `${title} — Wikipedia`,
+            url: articleUrl,
+            publishedDate: item.timestamp || null,
+            authorityTier: "High (Institutional / Official / Research)",
+            excerpt: excerpt.slice(0, 1000),
+            retrievedAt: new Date().toISOString(),
+          };
+        })
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
+  })();
+
+  const ddgInstantPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(
+        cleanQuery
+      )}&format=json&no_html=1&skip_disambig=1`;
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => ({}));
+      const out = [];
+      if (data?.AbstractText && data?.AbstractURL) {
+        out.push({
+          provider: "Web Knowledge Graph",
+          title: data.Heading || cleanQuery,
+          url: data.AbstractURL,
+          publishedDate: null,
+          authorityTier: scoreAuthority(data.AbstractURL),
+          excerpt: String(data.AbstractText).trim().slice(0, 1200),
+          retrievedAt: new Date().toISOString(),
+        });
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  })();
+
+  const [ddgHtmlSources, ddgInstantSources, wikiSources] = await Promise.all([
+    ddgHtmlPromise,
+    ddgInstantPromise,
+    wikiPromise,
+  ]);
+
+  sources.push(...ddgHtmlSources, ...ddgInstantSources, ...wikiSources);
+
+  return {
+    provider: "Public Web",
+    configured: true,
+    ok: sources.length > 0,
+    error: sources.length > 0 ? null : "No public web sources returned for this query.",
+    sources: sources.slice(0, limit),
+  };
+}
+
+/**
+ * Performs multi-query real-time web research using Firecrawl, Spider, and automatic
+ * public web fallback, deduplicates sources, prioritizes authoritative domains, and produces
  * a transparent verification summary.
  */
-export async function performRealTimeWebResearch({ queries = [], urlsToScrape = [] }) {
+export async function performRealTimeWebResearch({
+  query,
+  queries = [],
+  urlsToScrape = [],
+  maxResultsPerQuery = 4,
+} = {}) {
+  const inputQueries = [
+    ...(Array.isArray(queries) ? queries : queries ? [queries] : []),
+    ...(query ? [query] : []),
+  ];
+
   const cleanQueries = Array.from(
     new Set(
-      (Array.isArray(queries) ? queries : [queries])
+      inputQueries
         .map((q) => String(q || "").trim())
         .filter(Boolean)
     )
@@ -299,9 +484,15 @@ export async function performRealTimeWebResearch({ queries = [], urlsToScrape = 
 
   for (const q of cleanQueries) {
     const [fcRes, spRes] = await Promise.all([
-      searchWithFirecrawl(q, 4),
-      searchWithSpider(q, 3),
+      searchWithFirecrawl(q, maxResultsPerQuery),
+      searchWithSpider(q, Math.min(3, maxResultsPerQuery)),
     ]);
+
+    let publicFallback = null;
+    if (fcRes.sources.length === 0 && spRes.sources.length === 0) {
+      publicFallback = await searchWithPublicWeb(q, maxResultsPerQuery + 1);
+      rawSources.push(...publicFallback.sources);
+    }
 
     providerDiagnostics.push({
       query: q,
@@ -317,6 +508,14 @@ export async function performRealTimeWebResearch({ queries = [], urlsToScrape = 
         count: spRes.sources.length,
         error: spRes.error,
       },
+      publicWeb: publicFallback
+        ? {
+            configured: true,
+            ok: publicFallback.ok,
+            count: publicFallback.sources.length,
+            error: publicFallback.error,
+          }
+        : undefined,
     });
 
     rawSources.push(...fcRes.sources, ...spRes.sources);
@@ -357,9 +556,9 @@ export async function performRealTimeWebResearch({ queries = [], urlsToScrape = 
     return bHigh - aHigh;
   });
 
-  const anyServiceSucceeded = providerDiagnostics.some(
-    (d) => d.firecrawl.ok || d.spider.ok
-  );
+  const anyServiceSucceeded =
+    dedupedSources.length > 0 ||
+    providerDiagnostics.some((d) => d.firecrawl.ok || d.spider.ok || d.publicWeb?.ok);
 
   return {
     executedAt: new Date().toISOString(),

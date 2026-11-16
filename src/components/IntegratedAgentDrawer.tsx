@@ -1,0 +1,511 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Bot,
+  Check,
+  Copy,
+  ExternalLink,
+  Globe,
+  Maximize2,
+  Plus,
+  Send,
+  X,
+} from 'lucide-react';
+import {
+  AdditionalContextBox,
+  AgentConversation,
+  AgentMessage,
+  Persona,
+  Simulation,
+} from '../types/clamir.ts';
+import {
+  AdditionalContextManager,
+  serializeAdditionalContexts,
+} from './AdditionalContextManager.tsx';
+import { supabase } from '../supabaseClient.js';
+import { saveConversationToSupabase } from '../services/supabaseService.js';
+
+interface IntegratedAgentDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpenFullWorkspace: () => void;
+  conversations: AgentConversation[];
+  simulations: Simulation[];
+  personas: Persona[];
+  additionalContexts: AdditionalContextBox[];
+  onAdditionalContextsChange: (next: AdditionalContextBox[]) => void;
+  activeSimulationId?: string | null;
+  authToken: string;
+  onConversationsChanged: () => void;
+}
+
+function cleanDisplayText(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/^\s*#{1,6}\s+/gm, '')
+    .replace(/^(\s*)\*\s+/gm, '$1- ')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/\*\*/g, '')
+    .trim();
+}
+
+export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
+  isOpen,
+  onClose,
+  onOpenFullWorkspace,
+  conversations,
+  simulations,
+  personas,
+  additionalContexts,
+  onAdditionalContextsChange,
+  activeSimulationId = null,
+  authToken,
+  onConversationsChanged,
+}) => {
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(
+    conversations[0]?.id || null
+  );
+  const [selectedSimId, setSelectedSimId] = useState<string>(activeSimulationId || '');
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
+  const [showContextPanel, setShowContextPanel] = useState<boolean>(true);
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(false);
+  const [inputMessage, setInputMessage] = useState<string>('');
+  const [sending, setSending] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [localMessages, setLocalMessages] = useState<AgentMessage[]>([]);
+
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (activeSimulationId) {
+      setSelectedSimId(activeSimulationId);
+    }
+  }, [activeSimulationId]);
+
+  useEffect(() => {
+    if (!selectedConvId && conversations.length > 0) {
+      setSelectedConvId(conversations[0].id);
+    }
+  }, [conversations, selectedConvId]);
+
+  const activeConv = conversations.find((c) => c.id === selectedConvId) || null;
+  const displayedMessages =
+    localMessages.length > 0 ? localMessages : activeConv?.messages || [];
+
+  useEffect(() => {
+    if (activeConv) {
+      setLocalMessages(activeConv.messages || []);
+    } else {
+      setLocalMessages([]);
+    }
+  }, [activeConv?.id, activeConv?.messages.length]);
+
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [displayedMessages.length, sending, isOpen]);
+
+  if (!isOpen) return null;
+
+  const filledContextCount = additionalContexts.filter((c) => c.content.trim()).length;
+
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const rawText = inputMessage.trim();
+    if (!rawText || sending) return;
+
+    setInputMessage('');
+    setErrorMsg(null);
+    setSending(true);
+
+    const optimisticUserMsg: AgentMessage = {
+      id: `msg-temp-${Date.now()}`,
+      role: 'user',
+      content: rawText,
+      timestamp: new Date().toISOString(),
+    };
+    const priorHistory = [...displayedMessages];
+    setLocalMessages([...priorHistory, optimisticUserMsg]);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const liveToken = session?.access_token || authToken;
+
+      const cleanedContexts = additionalContexts
+        .filter((c) => c.content.trim())
+        .map((c) => ({
+          id: c.id,
+          title: c.title.trim(),
+          content: c.content.trim(),
+        }));
+
+      const res = await fetch('/api/agent/message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(liveToken ? { Authorization: `Bearer ${liveToken}` } : {}),
+        },
+        body: JSON.stringify({
+          conversationId: activeConv?.id || null,
+          simulationId: selectedSimId || null,
+          personaId: selectedPersonaId || null,
+          message: rawText,
+          customContextNote: serializeAdditionalContexts(additionalContexts) || undefined,
+          additionalContexts: cleanedContexts,
+          history: priorHistory,
+          webSearch: webSearchEnabled,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (session?.user && data.conversation) {
+          await saveConversationToSupabase(
+            session.user.id,
+            data.conversation.workspaceId,
+            data.conversation
+          ).catch(() => null);
+        }
+        if (data.conversation?.id) {
+          setSelectedConvId(data.conversation.id);
+        }
+        if (Array.isArray(data.conversation?.messages)) {
+          setLocalMessages(data.conversation.messages);
+        }
+        onConversationsChanged();
+        return;
+      }
+
+      // Direct stateless fallback via /api/research/search + /api/ai/generate if auth route fails
+      let fallbackSources: { title: string; uri: string }[] = [];
+      let rawSources: any[] = [];
+      if (webSearchEnabled) {
+        const searchRes = await fetch('/api/research/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queries: [rawText] }),
+        }).catch(() => null);
+        if (searchRes && searchRes.ok) {
+          const searchJson = await searchRes.json();
+          rawSources = Array.isArray(searchJson.sources) ? searchJson.sources : [];
+          fallbackSources = rawSources.map((s: any) => ({
+            title: s.title || s.url,
+            uri: s.url,
+          }));
+        }
+      }
+
+      const aiRes = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            ...priorHistory.map((m) => ({ role: m.role, content: m.content })),
+            { role: 'user', content: rawText },
+          ],
+          additionalContexts: cleanedContexts,
+          customNote: serializeAdditionalContexts(additionalContexts),
+          systemPrompt:
+            rawSources.length > 0
+              ? `Live Web Sources:\n${rawSources
+                  .map((s: any, idx: number) => `[${idx + 1}] ${s.title} (${s.url}): ${s.excerpt || ''}`)
+                  .join('\n')}`
+              : undefined,
+        }),
+      });
+
+      if (aiRes.ok) {
+        const aiJson = await aiRes.json();
+        const assistantMsg: AgentMessage = {
+          id: `msg-local-${Date.now()}`,
+          role: 'assistant',
+          content: aiJson.content || aiJson.result || 'Unable to generate response.',
+          timestamp: new Date().toISOString(),
+          webSearchUsed: webSearchEnabled,
+          sources: fallbackSources,
+        };
+        setLocalMessages([...priorHistory, optimisticUserMsg, assistantMsg]);
+      } else {
+        setErrorMsg('Unable to reach Clemir AI service. Please try again.');
+      }
+    } catch {
+      setErrorMsg('Connection interrupted while contacting Clemir AI.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleNewThread = () => {
+    setSelectedConvId(null);
+    setLocalMessages([]);
+    setErrorMsg(null);
+  };
+
+  const handleCopy = (id: string, content: string) => {
+    navigator.clipboard.writeText(cleanDisplayText(content));
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1800);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
+      <div className="w-full max-w-lg bg-white border-l border-[#E5E7EB] h-full flex flex-col justify-between shadow-lg">
+        {/* Drawer Header */}
+        <div className="px-5 py-3.5 border-b border-[#E5E7EB] flex items-center justify-between gap-2 bg-[#F9FAFB]">
+          <div className="flex items-center gap-2 min-w-0">
+            <Bot className="w-4 h-4 text-[#111827] shrink-0" />
+            <div className="min-w-0">
+              <h2 className="text-xs font-bold text-[#111827] truncate">
+                Clemir AI Agent
+              </h2>
+              <p className="text-[11px] text-[#6B7280] truncate">
+                {filledContextCount > 0
+                  ? `Using ${filledContextCount} Additional Context box${filledContextCount === 1 ? '' : 'es'}`
+                  : 'Integrated workspace assistant'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleNewThread}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-[#111827] bg-white border border-[#E5E7EB] rounded hover:border-[#000000] cursor-pointer"
+              title="Start new conversation"
+            >
+              <Plus className="w-3 h-3" />
+              <span>New</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenFullWorkspace();
+              }}
+              className="p-1.5 text-[#6B7280] hover:text-[#111827] bg-white border border-[#E5E7EB] rounded cursor-pointer"
+              title="Open full AI Agent workspace"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-[#6B7280] hover:text-[#111827] bg-white border border-[#E5E7EB] rounded cursor-pointer"
+              aria-label="Close AI Agent"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Collapsible Context & Selectors Strip */}
+        <div className="border-b border-[#E5E7EB] bg-[#F9FAFB] px-5 py-3 space-y-3 max-h-[38vh] overflow-y-auto">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowContextPanel(!showContextPanel)}
+              className="text-[11px] font-mono font-semibold text-[#111827] hover:underline cursor-pointer"
+            >
+              {showContextPanel
+                ? 'Hide Context & Study Filters'
+                : `Show Additional Context (${filledContextCount})`}
+            </button>
+            {conversations.length > 0 && (
+              <select
+                value={selectedConvId || ''}
+                onChange={(e) => setSelectedConvId(e.target.value || null)}
+                className="max-w-[190px] px-2 py-1 text-[11px] bg-white border border-[#E5E7EB] rounded text-[#111827]"
+              >
+                <option value="">New Conversation</option>
+                {conversations.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title || 'Conversation'}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {showContextPanel && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={selectedSimId}
+                  onChange={(e) => setSelectedSimId(e.target.value)}
+                  className="px-2 py-1.5 text-[11px] bg-white border border-[#E5E7EB] rounded text-[#111827]"
+                >
+                  <option value="">Open Assistant Mode</option>
+                  {simulations.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Study: {s.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={selectedPersonaId}
+                  onChange={(e) => setSelectedPersonaId(e.target.value)}
+                  className="px-2 py-1.5 text-[11px] bg-white border border-[#E5E7EB] rounded text-[#111827]"
+                >
+                  <option value="">Direct Assistant Voice</option>
+                  {personas.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      Audience: {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <AdditionalContextManager
+                contexts={additionalContexts}
+                onChange={onAdditionalContextsChange}
+                compact
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-white">
+          {displayedMessages.length === 0 ? (
+            <div className="h-full flex flex-col justify-center text-center space-y-2 px-4">
+              <p className="text-sm font-bold text-[#111827]">
+                Ask Clemir AI Anything
+              </p>
+              <p className="text-xs text-[#6B7280] leading-relaxed">
+                Your Additional Context boxes above are automatically read by Clemir AI. Toggle Web Search below anytime for live external sources.
+              </p>
+            </div>
+          ) : (
+            displayedMessages.map((msg) => {
+              const clean = cleanDisplayText(msg.content);
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col ${
+                    msg.role === 'user' ? 'items-end' : 'items-start'
+                  }`}
+                >
+                  <div
+                    className={`max-w-[90%] rounded-lg p-3.5 text-xs leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-[#000000] text-white'
+                        : 'bg-[#F9FAFB] text-[#111827] border border-[#E5E7EB]'
+                    }`}
+                  >
+                    {msg.role === 'assistant' && (
+                      <div className="flex items-center justify-between gap-3 pb-1.5 mb-1.5 border-b border-[#E5E7EB] text-[10px] font-mono text-[#6B7280]">
+                        <span>
+                          Clemir AI
+                          {msg.webSearchUsed ? ' · Web Search' : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(msg.id, clean)}
+                          className="inline-flex items-center gap-1 text-[#111827] hover:underline cursor-pointer"
+                        >
+                          {copiedId === msg.id ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    <div className="whitespace-pre-line">{clean}</div>
+
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-[#E5E7EB] space-y-1">
+                        <span className="block text-[10px] font-mono font-semibold text-[#111827]">
+                          Web Sources:
+                        </span>
+                        <ul className="space-y-1">
+                          {msg.sources.map((src, idx) => (
+                            <li key={idx} className="text-[11px]">
+                              <a
+                                href={src.uri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[#111827] underline hover:text-[#6B7280]"
+                              >
+                                <span className="truncate max-w-[320px]">
+                                  [{idx + 1}] {src.title || src.uri}
+                                </span>
+                                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {sending && (
+            <div className="p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-xs text-[#6B7280] font-mono">
+              Thinking{webSearchEnabled ? ' and searching web sources' : ''}...
+            </div>
+          )}
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700">
+              {errorMsg}
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Composer */}
+        <div className="p-4 border-t border-[#E5E7EB] bg-[#F9FAFB]">
+          <form onSubmit={handleSend} className="space-y-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Ask Clemir AI or search the web..."
+                className="flex-1 px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
+              />
+              <button
+                type="submit"
+                disabled={sending || !inputMessage.trim()}
+                className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Send</span>
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer ${
+                  webSearchEnabled
+                    ? 'bg-[#000000] text-white border-[#000000]'
+                    : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#111827]'
+                }`}
+              >
+                <Globe className="w-3 h-3" />
+                <span>Web Search: {webSearchEnabled ? 'On' : 'Off'}</span>
+              </button>
+              <span className="text-[10px] text-[#6B7280]">
+                Reads all Additional Context boxes
+              </span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};

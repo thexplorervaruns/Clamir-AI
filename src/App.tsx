@@ -29,7 +29,10 @@ import { SimulationResultsView } from './components/SimulationResultsView.tsx';
 import { AIAgentWorkspace } from './components/AIAgentWorkspace.tsx';
 import { AudienceDatabase } from './components/AudienceDatabase.tsx';
 import { AccountAndReports } from './components/AccountAndReports.tsx';
+import { IntegratedAgentDrawer } from './components/IntegratedAgentDrawer.tsx';
+import { createEmptyContextBox } from './components/AdditionalContextManager.tsx';
 import {
+  AdditionalContextBox,
   AgentConversation,
   Persona,
   PlatformConfig,
@@ -94,9 +97,36 @@ export default function App() {
   const [confirmDeleteSimId, setConfirmDeleteSimId] = useState<string | null>(null);
   const [simSearchQuery, setSimSearchQuery] = useState('');
 
-  // Global Context & Agent state accessible across the entire app
+  // AI Agent & Shared Additional Context Boxes accessible across the entire app
   const [agentFocusSimId, setAgentFocusSimId] = useState<string | null>(null);
   const [agentFocusPersonaId, setAgentFocusPersonaId] = useState<string | null>(null);
+  const [agentDrawerOpen, setAgentDrawerOpen] = useState<boolean>(false);
+  const [additionalContexts, setAdditionalContexts] = useState<AdditionalContextBox[]>(() => {
+    try {
+      const saved = localStorage.getItem('clemir_additional_contexts');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: any, idx: number) => ({
+            id: String(item?.id || `ctx-init-${idx}`),
+            title: String(item?.title || ''),
+            content: String(item?.content || ''),
+          }));
+        }
+      }
+    } catch {
+      // ignore storage failure
+    }
+    return [createEmptyContextBox()];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('clemir_additional_contexts', JSON.stringify(additionalContexts));
+    } catch {
+      // ignore storage failure
+    }
+  }, [additionalContexts]);
 
   // Workspace Switcher Modal State
   const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
@@ -514,7 +544,7 @@ export default function App() {
   const rawActiveWorkspace =
     workspaces.find((w) => w.id === activeWorkspaceId) || {
       id: 'ws-default',
-      name: 'Clamir Workspace',
+      name: 'Clemir Workspace',
       ownerId: user.id,
       createdAt: new Date().toISOString(),
       role: 'Owner' as const,
@@ -523,11 +553,12 @@ export default function App() {
   const activeWorkspace: Workspace = {
     ...rawActiveWorkspace,
     name:
+      rawActiveWorkspace.name === 'Clamir Workspace' ||
       rawActiveWorkspace.name === 'Clamir Research Lab' ||
       rawActiveWorkspace.name === "Varun's Workspace" ||
       rawActiveWorkspace.name === 'VUser Workspace' ||
       rawActiveWorkspace.name === "VUser's Workspace"
-        ? 'Clamir Workspace'
+        ? 'Clemir Workspace'
         : rawActiveWorkspace.name,
   };
 
@@ -563,8 +594,16 @@ export default function App() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => setAgentDrawerOpen(true)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-[#000000] rounded-md cursor-pointer"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>AI Agent</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setShowWorkspaceModal(true)}
-            className="px-2.5 py-1 text-xs font-medium text-[#111827] bg-[#F9FAFB] border border-[#E5E7EB] rounded-md truncate max-w-[160px]"
+            className="px-2.5 py-1 text-xs font-medium text-[#111827] bg-[#F9FAFB] border border-[#E5E7EB] rounded-md truncate max-w-[130px]"
           >
             {activeWorkspace.name}
           </button>
@@ -651,7 +690,7 @@ export default function App() {
                 {[
                   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
                   { id: 'simulations', label: 'Simulations', icon: Layers },
-                  { id: 'agent', label: 'Context & AI Agent', icon: Bot },
+                  { id: 'agent', label: 'AI Agent', icon: Bot },
                   { id: 'audience', label: 'Audience Database', icon: Users },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -792,15 +831,23 @@ export default function App() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5E7EB]">
                     <div>
                       <span className="text-xs font-mono text-[#6B7280]">
-                        CLAMIR WORKSPACE
+                        CLEMIR WORKSPACE
                       </span>
                       <h1 className="text-2xl font-bold text-[#111827] mt-0.5">
                         Welcome back, {displayUserName}
                       </h1>
                       <p className="text-xs sm:text-sm text-[#6B7280]">
-                        Simulate custom target audiences, interrogate context with AI agents, and export full research reports.
+                        Simulate custom target audiences, collaborate with Clemir AI Agent, and export full research reports.
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setAgentDrawerOpen(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 transition-colors cursor-pointer self-start sm:self-center whitespace-nowrap shrink-0"
+                    >
+                      <Bot className="w-4 h-4" />
+                      <span>Ask Clemir AI</span>
+                    </button>
                   </div>
 
                   {/* 4 KPI Cards */}
@@ -1068,7 +1115,8 @@ export default function App() {
                           type="text"
                           value={simSearchQuery}
                           onChange={(e) => setSimSearchQuery(e.target.value)}
-                          className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                          placeholder="Search simulations by name, type, or description..."
+                          className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                         />
                       </div>
 
@@ -1171,6 +1219,8 @@ export default function App() {
                 conversations={conversations}
                 simulations={simulations}
                 personas={personas}
+                additionalContexts={additionalContexts}
+                onAdditionalContextsChange={setAdditionalContexts}
                 initialSimulationId={agentFocusSimId}
                 initialPersonaId={agentFocusPersonaId}
                 authToken={authToken}
@@ -1277,7 +1327,8 @@ export default function App() {
                           type="text"
                           value={renameWorkspaceValue}
                           onChange={(e) => setRenameWorkspaceValue(e.target.value)}
-                          className="flex-1 px-2 py-1 border border-[#E5E7EB] rounded text-xs"
+                          placeholder="Enter new workspace name"
+                          className="flex-1 px-2 py-1 border border-[#E5E7EB] rounded text-xs placeholder:text-[#9CA3AF]"
                         />
                         <button
                           type="button"
@@ -1331,7 +1382,8 @@ export default function App() {
                   type="text"
                   value={newWorkspaceName}
                   onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md"
+                  placeholder="Workspace name (e.g., Q1 Product Launch)"
+                  className="flex-1 px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                 />
                 <button
                   type="submit"
@@ -1344,6 +1396,33 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Quick Integrated AI Agent Launcher (available on non-Agent views on desktop) */}
+      {activeTab !== 'agent' && !agentDrawerOpen && (
+        <button
+          type="button"
+          onClick={() => setAgentDrawerOpen(true)}
+          className="hidden md:inline-flex fixed bottom-5 right-5 z-40 items-center gap-2 px-4 py-2.5 text-xs font-semibold text-white bg-[#000000] rounded-md shadow-sm hover:bg-neutral-800 transition-colors cursor-pointer"
+        >
+          <Bot className="w-4 h-4" />
+          <span>Clemir AI Agent</span>
+        </button>
+      )}
+
+      {/* Integrated AI Agent Slide-Over Drawer */}
+      <IntegratedAgentDrawer
+        isOpen={agentDrawerOpen}
+        onClose={() => setAgentDrawerOpen(false)}
+        onOpenFullWorkspace={() => setActiveTab('agent')}
+        conversations={conversations}
+        simulations={simulations}
+        personas={personas}
+        additionalContexts={additionalContexts}
+        onAdditionalContextsChange={setAdditionalContexts}
+        activeSimulationId={agentFocusSimId || selectedSimId}
+        authToken={authToken}
+        onConversationsChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
+      />
 
       {/* DELETE SIMULATION CONFIRMATION DIALOG */}
       {confirmDeleteSimId && (

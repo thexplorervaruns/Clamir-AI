@@ -8,11 +8,11 @@ export function exportSimulationReport(
   const safeName = simulation.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'clamir-simulation';
+    .replace(/^-|-$/g, '') || 'clemir-simulation';
 
   if (format === 'JSON') {
     const payload = {
-      platform: 'Clamir AI — Audience Simulation & Consumer Intelligence',
+      platform: 'Clemir AI — Audience Simulation & Consumer Intelligence',
       disclaimer:
         'SIMULATED FEEDBACK NOTICE: All responses, scores, and statements in this report are AI-generated audience simulations and do not represent actual human customer research.',
       exportedAt: new Date().toISOString(),
@@ -27,7 +27,7 @@ export function exportSimulationReport(
     const res = simulation.results;
     const lines: string[] = [
       '========================================================================',
-      'CLAMIR AI — AUDIENCE SIMULATION RESEARCH REPORT',
+      'CLEMIR AI — AUDIENCE SIMULATION RESEARCH REPORT',
       'NOTE: Findings are AI-generated simulations, not actual human survey data.',
       '========================================================================',
       '',
@@ -139,7 +139,7 @@ export function exportSimulationReport(
   // Header
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('Clamir AI — Audience Simulation Report', margin, y);
+  doc.text('Clemir AI — Audience Simulation Report', margin, y);
   y += 18;
 
   doc.setFont('helvetica', 'normal');

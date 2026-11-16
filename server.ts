@@ -119,7 +119,7 @@ function createClamirPngIcon(size: number, paddedMaskable = false): Buffer {
     }
   };
 
-  // Three comets + small stars matching Clamir AI logo reference
+  // Three comets + small stars matching Clemir AI logo reference
   drawComet(38, 82, 12.5, 100, 16);
   drawComet(65, 94, 9.5, 110, 42);
   drawComet(24, 52, 8.5, 74, 8);
@@ -234,7 +234,9 @@ function normalizeServerUserName(
       l.startsWith('tank ') ||
       l === 'varun (workspace owner)' ||
       l === 'clamir user' ||
-      l === 'clamir explorer'
+      l === 'clamir explorer' ||
+      l === 'clemir user' ||
+      l === 'clemir explorer'
     );
   };
 
@@ -278,11 +280,12 @@ function loadDatabase(): DatabaseSchema {
       }));
       parsed.workspaces = parsed.workspaces.map((w) =>
         w.id === 'ws-default' ||
+        w.name === 'Clamir Workspace' ||
         w.name === 'Clamir Research Lab' ||
         w.name === "Varun's Workspace" ||
         w.name === 'VUser Workspace' ||
         w.name === "VUser's Workspace"
-          ? { ...w, name: 'Clamir Workspace' }
+          ? { ...w, name: 'Clemir Workspace' }
           : w
       );
       if (Array.isArray(parsed.conversations)) {
@@ -290,16 +293,30 @@ function loadDatabase(): DatabaseSchema {
           ...c,
           messages: (c.messages || []).map((m) => ({
             ...m,
-            content: cleanNaturalAssistantText(m.content || ''),
+            content: cleanNaturalAssistantText(
+              (m.content || '').replace(/Clamir Studio Pro/g, 'Clemir Studio Pro')
+            ),
           })),
+        }));
+      }
+      if (Array.isArray(parsed.reports)) {
+        parsed.reports = parsed.reports.map((r) => ({
+          ...r,
+          title: (r.title || '').replace(/Clamir/g, 'Clemir'),
+          simulationName: (r.simulationName || '').replace(/Clamir/g, 'Clemir'),
         }));
       }
       if (Array.isArray(parsed.simulations)) {
         parsed.simulations = parsed.simulations.map((s) => ({
           ...s,
+          name: (s.name || '').replace(/Clamir Studio Pro/g, 'Clemir Studio Pro'),
           results: s.results
             ? {
                 ...s.results,
+                simulationNotice: (s.results.simulationNotice || '').replace(
+                  /Clamir Engine/g,
+                  'Clemir Engine'
+                ),
                 personaBreakdown: (s.results.personaBreakdown || []).map((pb) => ({
                   ...pb,
                   simulatedStatement: cleanNaturalAssistantText(pb.simulatedStatement || ''),
@@ -328,7 +345,7 @@ function loadDatabase(): DatabaseSchema {
 
   const defaultWorkspace: Workspace = {
     id: 'ws-default',
-    name: 'Clamir Workspace',
+    name: 'Clemir Workspace',
     ownerId: ownerUser.id,
     createdAt: '2026-11-10T09:00:00Z',
     role: 'Owner',
@@ -348,7 +365,7 @@ function loadDatabase(): DatabaseSchema {
       workspaceId: 'ws-default',
       simulationId: INITIAL_SAMPLE_SIMULATIONS[0].id,
       simulationName: INITIAL_SAMPLE_SIMULATIONS[0].name,
-      title: 'Clamir Studio Pro — Pricing Analysis Brief (PDF)',
+      title: 'Clemir Studio Pro — Pricing Analysis Brief (PDF)',
       format: 'PDF',
       sizeLabel: '42 KB',
       createdAt: '2026-11-12T10:25:00Z',
@@ -389,7 +406,7 @@ function loadDatabase(): DatabaseSchema {
           id: 'msg-seed-2',
           role: 'assistant',
           content:
-            'Based on the persona responses in "Clamir Studio Pro — Usage vs. Seat Pricing Analysis":\n\n1. Step-Up Gap ($0 to $149/mo): Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5 to 8 studies a month.\n2. Deliverable Verification: Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. Quota Clarity: Personas recommended replacing vague usage limits with an explicit monthly query number so teams can forecast usage accurately.',
+            'Based on the persona responses in "Clemir Studio Pro — Usage vs. Seat Pricing Analysis":\n\n1. Step-Up Gap ($0 to $149/mo): Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5 to 8 studies a month.\n2. Deliverable Verification: Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. Quota Clarity: Personas recommended replacing vague usage limits with an explicit monthly query number so teams can forecast usage accurately.',
           timestamp: '2026-11-12T11:01:00Z',
           webSearchUsed: false,
         },
@@ -554,7 +571,7 @@ function ensureUserAndWorkspaceForSupabase(params: {
     user = {
       id: params.userId || `user-${Date.now()}`,
       name: normalizeServerUserName(params.name, cleanEmail),
-      email: cleanEmail || 'user@clamir.ai',
+      email: cleanEmail || 'user@clemir.ai',
       plan: 'Explorer',
       isOwner: cleanEmail === OWNER_EMAIL.toLowerCase(),
       createdAt: new Date().toISOString(),
@@ -565,7 +582,7 @@ function ensureUserAndWorkspaceForSupabase(params: {
 
     const newWs: Workspace = {
       id: `ws-${Date.now()}`,
-      name: 'Clamir Workspace',
+      name: 'Clemir Workspace',
       ownerId: user.id,
       createdAt: new Date().toISOString(),
       role: 'Owner',
@@ -601,7 +618,7 @@ function ensureUserAndWorkspaceForSupabase(params: {
   if (userWorkspaces.length === 0) {
     const fallbackWs: Workspace = {
       id: `ws-${Date.now()}`,
-      name: 'Clamir Workspace',
+      name: 'Clemir Workspace',
       ownerId: user.id,
       createdAt: new Date().toISOString(),
       role: 'Owner',
@@ -778,7 +795,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
         response: cleanNaturalAssistantText(parsed.response || ''),
         keyObjection: cleanNaturalAssistantText(parsed.keyObjection || ''),
         opportunity: cleanNaturalAssistantText(parsed.opportunity || ''),
-        engineMode: 'Clamir AI Assistant',
+        engineMode: 'Clemir AI Assistant',
       });
       return;
     } catch {
@@ -792,7 +809,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       response: `Evaluating "${qText}" from the ${persona.name} perspective: ${persona.tagline} We weigh ${persona.decisionFactors.slice(0, 2).join(' and ').toLowerCase()} heavily before committing.`,
       keyObjection: persona.concerns[0],
       opportunity: `Highlight ${persona.preferences[0].toLowerCase()} in the initial trial experience.`,
-      engineMode: 'Clamir AI Assistant',
+      engineMode: 'Clemir AI Assistant',
     });
   });
 
@@ -828,7 +845,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
 
     const newWs: Workspace = {
       id: `ws-${Date.now()}`,
-      name: 'Clamir Workspace',
+      name: 'Clemir Workspace',
       ownerId: newUser.id,
       createdAt: new Date().toISOString(),
       role: 'Owner',
@@ -1003,10 +1020,11 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       // First try Firecrawl URL extraction if configured
       try {
         const scraped = await scrapeUrlWithFirecrawl(parsed.toString());
-        if (scraped && scraped.content) {
+        const scrapedText = scraped && scraped.ok ? scraped.extractedContent : '';
+        if (scrapedText) {
           res.json({
             title: scraped.title || parsed.hostname,
-            extractedContent: scraped.content.slice(0, 2400),
+            extractedContent: scrapedText.slice(0, 2400),
           });
           return;
         }
@@ -1019,7 +1037,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       try {
         const response = await fetch(parsed.toString(), {
           signal: controller.signal,
-          headers: { 'User-Agent': 'Clamir-Research-Extractor/1.0' },
+          headers: { 'User-Agent': 'Clemir-Research-Extractor/1.0' },
         });
         clearTimeout(timeout);
         const html = await response.text();
@@ -1347,30 +1365,54 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
   app.post('/api/agent/message', requireAuth, async (req: AuthedRequest, res) => {
     const user = req.user!;
     const activeWs = db.workspaces.find((w) => w.ownerId === user.id) || db.workspaces[0];
-    const { conversationId, simulationId, personaId, message, customContextNote, webSearch } =
-      req.body || {};
+    const {
+      conversationId,
+      simulationId,
+      personaId,
+      message,
+      customContextNote,
+      additionalContexts,
+      history,
+      webSearch,
+    } = req.body || {};
     const cleanMsg = String(message || '').trim();
     if (!cleanMsg) {
       res.status(400).json({ error: 'Message text is required.' });
       return;
     }
 
+    const clientHistory = Array.isArray(history)
+      ? history
+          .filter((m: any) => m && m.content)
+          .map((m: any, idx: number) => ({
+            id: m.id || `msg-hist-${idx}`,
+            role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+            content: String(m.content),
+            timestamp: m.timestamp || new Date().toISOString(),
+            webSearchUsed: Boolean(m.webSearchUsed),
+            sources: Array.isArray(m.sources) ? m.sources : undefined,
+          }))
+      : [];
+
     let conv = db.conversations.find((c) => c.id === conversationId);
     if (!conv) {
       conv = {
-        id: `conv-${Date.now()}`,
+        id: conversationId || `conv-${Date.now()}`,
         workspaceId: activeWs.id,
         title: cleanMsg.slice(0, 48),
         simulationId: simulationId || null,
         personaId: personaId || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        messages: [],
+        messages: clientHistory,
       };
       db.conversations.unshift(conv);
     } else {
       conv.simulationId = simulationId !== undefined ? simulationId || null : conv.simulationId;
       conv.personaId = personaId !== undefined ? personaId || null : conv.personaId;
+      if (conv.messages.length === 0 && clientHistory.length > 0) {
+        conv.messages = clientHistory;
+      }
     }
 
     const sim = simulationId
@@ -1403,8 +1445,8 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     if (webSearch) {
       try {
         const searchBundle = await performRealTimeWebResearch({
-          query: cleanMsg,
-          maxResultsPerQuery: 4,
+          queries: [cleanMsg],
+          maxResultsPerQuery: 5,
         });
         rawWebSources = searchBundle.sources || [];
         for (const src of rawWebSources) {
@@ -1418,13 +1460,24 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       }
     }
 
-    const { reply } = await generateSmartAssistantResponse({
+    const normalizedAdditionalContexts = Array.isArray(additionalContexts)
+      ? additionalContexts
+          .filter((c: any) => c && String(c.content || '').trim())
+          .map((c: any) => ({
+            id: String(c.id || ''),
+            title: String(c.title || '').trim(),
+            content: String(c.content || '').trim(),
+          }))
+      : [];
+
+    const { reply, model } = await generateSmartAssistantResponse({
       userMessage: cleanMsg,
       history: conv.messages,
       simulation: sim,
       persona,
       webSources: rawWebSources,
       customNote: String(customContextNote || '').trim(),
+      additionalContexts: normalizedAdditionalContexts,
     });
 
     conv.messages.push({
@@ -1438,7 +1491,14 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     conv.updatedAt = new Date().toISOString();
     saveDatabase(db);
 
-    res.json({ conversation: conv });
+    res.json({
+      conversation: conv,
+      model,
+      webSearchInfo: {
+        executed: Boolean(webSearch),
+        sourcesFound: extractedSources.length,
+      },
+    });
   });
 
   // Reports & Artifacts Endpoints
@@ -1568,7 +1628,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Clamir AI server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Clemir AI server listening on http://0.0.0.0:${PORT}`);
   });
 }
 

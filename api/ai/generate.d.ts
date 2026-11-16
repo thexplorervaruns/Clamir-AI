@@ -1,3 +1,11 @@
+export type AdditionalContextInput =
+  | {
+      id?: string;
+      title?: string;
+      content: string;
+    }
+  | string;
+
 export function cleanNaturalAssistantText(rawText: string): string;
 
 export function callOpenRouterChat(params: {
@@ -17,6 +25,16 @@ export function callOpenRouterChat(params: {
   raw: any;
 }>;
 
+export function buildContextualAssistantFallback(params: {
+  userMessage: string;
+  history?: Array<{ role: string; content: string }>;
+  simulation?: any;
+  persona?: any;
+  webSources?: Array<any>;
+  customNote?: string;
+  additionalContexts?: AdditionalContextInput[];
+}): string;
+
 export function generateSmartAssistantResponse(params: {
   userMessage: string;
   history?: Array<{ role: string; content: string }>;
@@ -24,6 +42,7 @@ export function generateSmartAssistantResponse(params: {
   persona?: any;
   webSources?: Array<any>;
   customNote?: string;
+  additionalContexts?: AdditionalContextInput[];
 }): Promise<{
   reply: string;
   model: string;

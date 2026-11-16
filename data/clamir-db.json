@@ -36,12 +36,32 @@
       "token": "a3b70a8ad44ce059732c8ac3a13f7d84720829c6852d45af",
       "userId": "user-owner-1",
       "createdAt": "2026-11-15T12:54:03.287Z"
+    },
+    {
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImM0MDNiYTNjLTJmZDctNDZiMy1iZTZlLWFmM2NlOGQ1NzBhOSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3ZmcmtpdWdxZW92ZXFlZGl6ZmdrLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzk0NzkwNTYyLCJpYXQiOjE3OTQ3ODY5NjIsImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsIjoibWFpbGF0dHZhcnVuc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGhvbmVfdmVyaWZpZWQiOmZhbHNlLCJzdWIiOiI1ZGE4MzU1ZS1hZGEyLTQwYmItODNhZC05YzlhYTc2NGQ4OTgifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc5NDc0NjEwNX1dLCJzZXNzaW9uX2lkIjoiOWQ0OTBjNDEtZDA4NC00M2FkLWI1ZDUtYzEyZTc3ODI0NjJkIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.54US_Bdeog4VI0VaUbR5mpKWCcuPyk8O8ULSsrsmOe1ZaTbhL6J140YL3MGsE_C5XKpzm-QJNLzbDBpq6pW1JQ",
+      "userId": "user-1794743591865",
+      "createdAt": "2026-11-16T00:12:30.504Z"
+    },
+    {
+      "token": "25fa90ed2eebc6edd155b8032752fd395fd772e180225900",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T00:20:57.741Z"
+    },
+    {
+      "token": "9c211167d83318019c8e34b00b4dcd7b1940c27e3a5ec39f",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T00:21:30.939Z"
+    },
+    {
+      "token": "86d7ce8a3e002586dfc756b897b006bb8ab9f91bf4badc3f",
+      "userId": "user-owner-1",
+      "createdAt": "2026-11-16T00:21:55.933Z"
     }
   ],
   "workspaces": [
     {
       "id": "ws-default",
-      "name": "Clamir Workspace",
+      "name": "Clemir Workspace",
       "ownerId": "user-owner-1",
       "createdAt": "2026-11-10T09:00:00Z",
       "role": "Owner"
@@ -55,7 +75,7 @@
     },
     {
       "id": "ws-1794743591865",
-      "name": "Clamir Workspace",
+      "name": "Clemir Workspace",
       "ownerId": "user-1794743591865",
       "createdAt": "2026-11-15T11:53:11.865Z",
       "role": "Owner"
@@ -73,7 +93,7 @@
     {
       "id": "sim-sample-pricing-01",
       "workspaceId": "ws-default",
-      "name": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "name": "Clemir Studio Pro — Usage vs. Seat Pricing Analysis",
       "type": "pricing_analysis",
       "description": "Evaluating customer response to a three-tier SaaS pricing model ($0 Starter, $149 Growth flat-rate, Custom Enterprise) versus per-seat billing for a B2B product analytics workflow.",
       "hypothesis": "Value Optimizers and Convenience Seekers will strongly prefer predictable flat-rate workspace pricing ($149/mo) over per-seat charges that penalize team collaboration.",
@@ -181,7 +201,7 @@
       "estimatedSecondsRemaining": 0,
       "isSample": true,
       "results": {
-        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clemir Engine and do not represent actual human survey respondents.",
         "aiEngineMode": "simulated-engine",
         "generatedAt": "2026-11-12T10:21:15Z",
         "executiveSummary": {
@@ -449,7 +469,7 @@
       "estimatedSecondsRemaining": 0,
       "isSample": true,
       "results": {
-        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clemir Engine and do not represent actual human survey respondents.",
         "aiEngineMode": "simulated-engine",
         "generatedAt": "2026-11-13T14:01:10Z",
         "executiveSummary": {
@@ -627,7 +647,7 @@
     {
       "id": "sim-sample-pricing-01-ws-1794743591865",
       "workspaceId": "ws-1794743591865",
-      "name": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "name": "Clemir Studio Pro — Usage vs. Seat Pricing Analysis",
       "type": "pricing_analysis",
       "description": "Evaluating customer response to a three-tier SaaS pricing model ($0 Starter, $149 Growth flat-rate, Custom Enterprise) versus per-seat billing for a B2B product analytics workflow.",
       "hypothesis": "Value Optimizers and Convenience Seekers will strongly prefer predictable flat-rate workspace pricing ($149/mo) over per-seat charges that penalize team collaboration.",
@@ -735,7 +755,7 @@
       "estimatedSecondsRemaining": 0,
       "isSample": true,
       "results": {
-        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clemir Engine and do not represent actual human survey respondents.",
         "aiEngineMode": "simulated-engine",
         "generatedAt": "2026-11-12T10:21:15Z",
         "executiveSummary": {
@@ -1003,7 +1023,7 @@
       "estimatedSecondsRemaining": 0,
       "isSample": true,
       "results": {
-        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clamir Engine and do not represent actual human survey respondents.",
+        "simulationNotice": "SIMULATED FEEDBACK NOTICE: All responses, scores, and statements below are AI-generated audience simulations produced by Clemir Engine and do not represent actual human survey respondents.",
         "aiEngineMode": "simulated-engine",
         "generatedAt": "2026-11-13T14:01:10Z",
         "executiveSummary": {
@@ -1181,6 +1201,132 @@
   ],
   "conversations": [
     {
+      "id": "verify-final-1794788515938",
+      "workspaceId": "ws-default",
+      "title": "Recommend a pricing strategy based on my context",
+      "simulationId": null,
+      "personaId": null,
+      "createdAt": "2026-11-16T00:21:55.974Z",
+      "updatedAt": "2026-11-16T00:21:57.586Z",
+      "messages": [
+        {
+          "id": "msg-u-1794788515974",
+          "role": "user",
+          "content": "Recommend a pricing strategy based on my context and live benchmarks",
+          "timestamp": "2026-11-16T00:21:55.974Z"
+        },
+        {
+          "id": "msg-a-1794788517586",
+          "role": "assistant",
+          "content": "Here is what live web search returned for \"Recommend a pricing strategy based on my context and live benchmarks\":\n\n1. Using AI to Guide Your Pricing Strategy: Sign In × Personal Banking & Small Business - Tidal Business Checking - Business Savings & CDs - Personal Savings & CDs Sign In Open a New Account Commercial Banking - Business Plus Checking - Business Plus Savings & CDs - Treasury Management Sign In Contact Us Business Loans - M\n\n2. The AI pricing and monetization playbook: Search `/` LinkedInXInstagramYouTube Table of ContentsKey AI pricing takeawaysHow should I price my AI product?Three emerging AI business models shaping AI pricing today1\\. Consumption-based pricing (per API call, per LLM token)2\\. Workflow-based pricing (per completed task)3\\. O\n\n3. What's Our Best Pricing Strategy? - Armin Kakas - Medium: Sitemap Open in app Sign up Sign in Medium Logo Get app Write Search Sign up Sign in 🚀 Our new writing app, TK, is on Product Hunt. Show support → Armin Kakas I write about Revenue Growth Analytics, encompassing Pricing & Revenue Growth Management, Sales & Marketing Enablement, \n\n4. Pricing Strategies and Models: Skip to main content Pricing strategies and models Jan 6, 2024 / 17 min read Will Webster Ethan Wing Pricing is one of the hardest things for any business to get right. The good news is that there are many tried and tested strategies to follow and models to apply. Here we look at\n\nConnecting this to your provided context (Budget Limit, Target Buyer):\n- Budget Limit: Max $250/month\n- Target Buyer: Bootstrapped fintech startups\nFocusing on the web findings above within these parameters helps keep your next step aligned with your actual goals and constraints.\n\nWould you like me to turn these findings into an action plan or analyze one of these points further?",
+          "timestamp": "2026-11-16T00:21:57.586Z",
+          "webSearchUsed": true,
+          "sources": [
+            {
+              "title": "Using AI to Guide Your Pricing Strategy",
+              "uri": "https://www.liveoak.bank/blog/ai-pricing-strategy-small-business"
+            },
+            {
+              "title": "The AI pricing and monetization playbook",
+              "uri": "https://www.bvp.com/atlas/the-ai-pricing-and-monetization-playbook"
+            },
+            {
+              "title": "What's Our Best Pricing Strategy? - Armin Kakas - Medium",
+              "uri": "https://arminkakas.medium.com/whats-our-best-pricing-strategy-6920dbf3066c"
+            },
+            {
+              "title": "Pricing Strategies and Models",
+              "uri": "https://www.qualtrics.com/articles/strategy-research/pricing-strategies/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verify-clean-1794788490942",
+      "workspaceId": "ws-default",
+      "title": "Recommend a pricing strategy based on my context",
+      "simulationId": null,
+      "personaId": null,
+      "createdAt": "2026-11-16T00:21:30.948Z",
+      "updatedAt": "2026-11-16T00:21:32.684Z",
+      "messages": [
+        {
+          "id": "msg-u-1794788490948",
+          "role": "user",
+          "content": "Recommend a pricing strategy based on my context and live benchmarks",
+          "timestamp": "2026-11-16T00:21:30.948Z"
+        },
+        {
+          "id": "msg-a-1794788492684",
+          "role": "assistant",
+          "content": "Here is what live web search returned for \"Recommend a pricing strategy based on my context and live benchmarks\":\n\n1. Using AI to Guide Your Pricing Strategy: Sign In × Personal Banking & Small Business - Tidal Business Checking - Business Savings & CDs - Personal Savings & CDs Sign In Open a New Account Commercial Banking - Business Plus Checking - Business Plus Savings & CDs - Treasury Management Sign In Contact Us Business Loans - M\n\n2. The AI pricing and monetization playbook: Search `/` LinkedInXInstagramYouTube Table of ContentsKey AI pricing takeawaysHow should I price my AI product?Three emerging AI business models shaping AI pricing today1\\. Consumption-based pricing (per API call, per LLM token)2\\. Workflow-based pricing (per completed task)3\\. O\n\n3. What's Our Best Pricing Strategy? - Armin Kakas - Medium: Sitemap Open in app Sign up Sign in Medium Logo Get app Write Search Sign up Sign in 🚀 Our new writing app, TK, is on Product Hunt. Show support → Armin Kakas I write about Revenue Growth Analytics, encompassing Pricing & Revenue Growth Management, Sales & Marketing Enablement, \n\n4. Pricing Strategies and Models: Skip to main content Pricing strategies and models Jan 6, 2024 / 17 min read Will Webster Ethan Wing Pricing is one of the hardest things for any business to get right. The good news is that there are many tried and tested strategies to follow and models to apply. Here we look at\n\nConnecting this to your provided context (Budget Limit, Target Buyer):\n- Budget Limit: Max $250/month\n- Target Buyer: Bootstrapped fintech startups\nFocusing on the web findings above within these parameters helps keep your next step aligned with your actual goals and constraints.\n\nWould you like me to turn these findings into an action plan or analyze one of these points further?",
+          "timestamp": "2026-11-16T00:21:32.684Z",
+          "webSearchUsed": true,
+          "sources": [
+            {
+              "title": "Using AI to Guide Your Pricing Strategy",
+              "uri": "https://www.liveoak.bank/blog/ai-pricing-strategy-small-business"
+            },
+            {
+              "title": "The AI pricing and monetization playbook",
+              "uri": "https://www.bvp.com/atlas/the-ai-pricing-and-monetization-playbook"
+            },
+            {
+              "title": "What's Our Best Pricing Strategy? - Armin Kakas - Medium",
+              "uri": "https://arminkakas.medium.com/whats-our-best-pricing-strategy-6920dbf3066c"
+            },
+            {
+              "title": "Pricing Strategies and Models",
+              "uri": "https://www.qualtrics.com/articles/strategy-research/pricing-strategies/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "verify-conv-1794788457744",
+      "workspaceId": "ws-default",
+      "title": "Recommend a pricing strategy based on my context",
+      "simulationId": null,
+      "personaId": null,
+      "createdAt": "2026-11-16T00:20:57.749Z",
+      "updatedAt": "2026-11-16T00:21:03.125Z",
+      "messages": [
+        {
+          "id": "msg-u-1794788457749",
+          "role": "user",
+          "content": "Recommend a pricing strategy based on my context and live benchmarks",
+          "timestamp": "2026-11-16T00:20:57.749Z"
+        },
+        {
+          "id": "msg-a-1794788463125",
+          "role": "assistant",
+          "content": "Here is what live web search returned for \"Recommend a pricing strategy based on my context and live benchmarks\":\n\n1. Using AI to Guide Your Pricing Strategy: Sign In × Personal Banking & Small Business - Tidal Business Checking - Business Savings & CDs - Personal Savings & \n\n2. The AI pricing and monetization playbook: Search `/` LinkedInXInstagramYouTube Open in app Sign up Sign in # Pricing strategies and models Jan 6, 2024 / 17 min read Will Webster Ethan Wing:\n- Budget Limit: Max $250/month\n- Target Buyer: Bootstrapped fintech startups\nFocusing on the web findings above within these parameters helps keep your next step aligned with your actual goals and constraints.\n\nWould you like me to turn these findings into an action plan or analyze one of these points further?",
+          "timestamp": "2026-11-16T00:21:03.125Z",
+          "webSearchUsed": true,
+          "sources": [
+            {
+              "title": "Using AI to Guide Your Pricing Strategy",
+              "uri": "https://www.liveoak.bank/blog/ai-pricing-strategy-small-business"
+            },
+            {
+              "title": "The AI pricing and monetization playbook",
+              "uri": "https://www.bvp.com/atlas/the-ai-pricing-and-monetization-playbook"
+            },
+            {
+              "title": "What's Our Best Pricing Strategy? - Armin Kakas - Medium",
+              "uri": "https://arminkakas.medium.com/whats-our-best-pricing-strategy-6920dbf3066c"
+            },
+            {
+              "title": "Pricing Strategies and Models",
+              "uri": "https://www.qualtrics.com/articles/strategy-research/pricing-strategies/"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "conv-1794747243314",
       "workspaceId": "ws-default",
       "title": "I am launching a new B2B analytics app next mont",
@@ -1237,7 +1383,7 @@
         {
           "id": "msg-seed-2",
           "role": "assistant",
-          "content": "Based on the simulated persona responses in \"Clamir Studio Pro — Usage vs. Seat Pricing Analysis\":\n\n1. Step-Up Gap ($0 to $149/mo): Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5–8 studies a month.\n2. Deliverable Verification: Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. Quota Clarity: Personas recommended replacing \"Limited AI agent usage\" with an explicit monthly query number (e.g., 25 AI Agent queries/month).\n\nNote: These insights reflect simulated AI persona evaluations, not actual human survey respondents.",
+          "content": "Based on the simulated persona responses in \"Clemir Studio Pro — Usage vs. Seat Pricing Analysis\":\n\n1. Step-Up Gap ($0 to $149/mo): Value Optimizers (69/100 acceptance) noted that jumping directly from a $0 Explorer plan to $149/month feels steep for solo founders running 5–8 studies a month.\n2. Deliverable Verification: Prospective buyers want to inspect at least one sample full-fidelity PDF export on the free tier before committing to a recurring subscription.\n3. Quota Clarity: Personas recommended replacing \"Limited AI agent usage\" with an explicit monthly query number (e.g., 25 AI Agent queries/month).\n\nNote: These insights reflect simulated AI persona evaluations, not actual human survey respondents.",
           "timestamp": "2026-11-12T11:01:00Z",
           "webSearchUsed": false
         }
@@ -1249,8 +1395,8 @@
       "id": "rep-seed-1",
       "workspaceId": "ws-default",
       "simulationId": "sim-sample-pricing-01",
-      "simulationName": "Clamir Studio Pro — Usage vs. Seat Pricing Analysis",
-      "title": "Clamir Studio Pro — Pricing Analysis Brief (PDF)",
+      "simulationName": "Clemir Studio Pro — Usage vs. Seat Pricing Analysis",
+      "title": "Clemir Studio Pro — Pricing Analysis Brief (PDF)",
       "format": "PDF",
       "sizeLabel": "42 KB",
       "createdAt": "2026-11-12T10:25:00Z",
@@ -1269,6 +1415,27 @@
     }
   ],
   "recentSearches": [
+    {
+      "id": "rs-1794788515974",
+      "workspaceId": "ws-default",
+      "query": "Recommend a pricing strategy based on my context and live be",
+      "category": "WebSearch",
+      "timestamp": "2026-11-16T00:21:55.974Z"
+    },
+    {
+      "id": "rs-1794788490948",
+      "workspaceId": "ws-default",
+      "query": "Recommend a pricing strategy based on my context and live be",
+      "category": "WebSearch",
+      "timestamp": "2026-11-16T00:21:30.948Z"
+    },
+    {
+      "id": "rs-1794788457749",
+      "workspaceId": "ws-default",
+      "query": "Recommend a pricing strategy based on my context and live be",
+      "category": "WebSearch",
+      "timestamp": "2026-11-16T00:20:57.749Z"
+    },
     {
       "id": "rs-1794747253052",
       "workspaceId": "ws-default",

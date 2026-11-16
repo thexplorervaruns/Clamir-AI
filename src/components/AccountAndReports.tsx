@@ -316,11 +316,12 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 <label className="block font-semibold text-[#111827] mb-1">Full Name</label>
                 <input
                   type="text"
-                  name="clamir-account-fullname"
+                  name="clemir-account-fullname"
                   autoComplete="off"
                   value={profileName}
                   onChange={(e) => setProfileName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Enter your display name"
+                  className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -328,11 +329,12 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 <label className="block font-semibold text-[#111827] mb-1">Email Address</label>
                 <input
                   type="email"
-                  name="clamir-account-email"
+                  name="clemir-account-email"
                   autoComplete="off"
                   value={profileEmail}
                   onChange={(e) => setProfileEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="name@company.com"
+                  className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
 

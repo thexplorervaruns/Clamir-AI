@@ -82,7 +82,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
     };
     const fallbackWs: Workspace = {
       id: 'ws-default',
-      name: 'Clamir Workspace',
+      name: 'Clemir Workspace',
       ownerId: supaUser.id,
       createdAt: new Date().toISOString(),
       role: 'Owner',
@@ -235,7 +235,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
           className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B7280] hover:text-[#111827] transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Clamir AI Home</span>
+          <span>Back to Clemir AI Home</span>
         </button>
       </div>
 
@@ -244,7 +244,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
           <ClamirLogo size="lg" />
           <h1 className="mt-5 text-xl font-bold text-[#111827]">
             {mode === 'login' && 'Sign in to your workspace'}
-            {mode === 'signup' && 'Create your Clamir AI account'}
+            {mode === 'signup' && 'Create your Clemir AI account'}
             {mode === 'forgot' && 'Reset your password'}
           </h1>
           <p className="mt-1.5 text-xs text-[#6B7280]">
@@ -267,7 +267,8 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   autoComplete="off"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Enter your full name"
+                  className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
             </div>
@@ -283,7 +284,8 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                placeholder="name@company.com"
+                className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
             </div>
           </div>
@@ -299,7 +301,8 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Enter password (6+ characters)"
+                  className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
                 <button
                   type="button"
@@ -324,7 +327,8 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Re-enter your password"
+                  className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
             </div>

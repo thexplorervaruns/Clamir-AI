@@ -14,8 +14,8 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: '/',
-          name: 'Clamir AI — Audience Simulation Platform',
-          short_name: 'Clamir AI',
+          name: 'Clemir AI — Audience Simulation Platform',
+          short_name: 'Clemir AI',
           description: 'AI-powered Audience Simulation and Consumer Intelligence platform.',
           theme_color: '#ffffff',
           background_color: '#ffffff',

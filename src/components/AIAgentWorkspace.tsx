@@ -15,10 +15,17 @@ import {
   X,
 } from 'lucide-react';
 import {
+  AdditionalContextBox,
   AgentConversation,
+  AgentMessage,
   Persona,
   Simulation,
 } from '../types/clamir.ts';
+import {
+  AdditionalContextManager,
+  createEmptyContextBox,
+  serializeAdditionalContexts,
+} from './AdditionalContextManager.tsx';
 import { supabase } from '../supabaseClient.js';
 import {
   deleteConversationInSupabase,
@@ -30,6 +37,8 @@ interface AIAgentWorkspaceProps {
   conversations: AgentConversation[];
   simulations: Simulation[];
   personas: Persona[];
+  additionalContexts?: AdditionalContextBox[];
+  onAdditionalContextsChange?: (next: AdditionalContextBox[]) => void;
   initialSimulationId?: string | null;
   initialPersonaId?: string | null;
   authToken: string;
@@ -91,6 +100,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   conversations,
   simulations,
   personas,
+  additionalContexts: controlledContexts,
+  onAdditionalContextsChange,
   initialSimulationId = null,
   initialPersonaId = null,
   authToken,
@@ -107,7 +118,13 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>(
     initialPersonaId || ''
   );
-  const [customAudienceContextNote, setCustomAudienceContextNote] = useState('');
+
+  const [localContexts, setLocalContexts] = useState<AdditionalContextBox[]>(() => [
+    createEmptyContextBox(),
+  ]);
+  const additionalContexts = controlledContexts ?? localContexts;
+  const setAdditionalContexts = onAdditionalContextsChange ?? setLocalContexts;
+
   const [showCreateCustomAudience, setShowCreateCustomAudience] = useState(false);
   const [newAudienceName, setNewAudienceName] = useState('');
   const [newAudienceSegment, setNewAudienceSegment] = useState('');
@@ -116,8 +133,9 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [showRightContext, setShowRightContext] = useState(true);
+  const [optimisticMessages, setOptimisticMessages] = useState<AgentMessage[] | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -139,42 +157,56 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   const activeConv = conversations.find((c) => c.id === activeConvId) || null;
   const activeSimulation = simulations.find((s) => s.id === selectedSimId) || null;
   const activePersona = personas.find((p) => p.id === selectedPersonaId) || null;
+  const displayedMessages = optimisticMessages ?? activeConv?.messages ?? [];
+
+  useEffect(() => {
+    setOptimisticMessages(null);
+  }, [activeConv?.id, activeConv?.messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeConv?.messages.length, sending]);
+  }, [displayedMessages.length, sending]);
+
+  const getFreshToken = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return {
+      session,
+      token: session?.access_token || authToken,
+    };
+  };
 
   const handleCreateCustomAudienceForAgent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAudienceName.trim()) return;
     try {
+      const { session, token } = await getFreshToken();
+      const combinedContext = serializeAdditionalContexts(additionalContexts);
       const res = await fetch('/api/personas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: newAudienceName.trim(),
           segment: newAudienceSegment.trim() || 'Custom Defined Audience',
           tagline:
             newAudienceDescription.trim() ||
-            `Custom target audience defined inside the AI Assistant.`,
+            'Custom target audience defined inside the AI Assistant.',
           description:
             newAudienceDescription.trim() ||
-            `Custom target audience defined inside the AI Assistant.`,
+            'Custom target audience defined inside the AI Assistant.',
           avatarCode: newAudienceName.trim().slice(0, 2).toUpperCase(),
           tags: ['Custom Audience', newAudienceSegment.trim() || 'Target Segment'],
           context:
-            customAudienceContextNote.trim() ||
+            combinedContext ||
             `Evaluates solutions within ${newAudienceSegment.trim() || 'custom market context'}.`,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
         if (session?.user && data.persona) {
           await savePersonaToSupabase(
             session.user.id,
@@ -192,17 +224,20 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         setShowCreateCustomAudience(false);
       }
     } catch {
-      // Ignore
+      setErrorMsg('Unable to save custom audience. Please check your connection.');
     }
   };
 
   const handleStartNewConversation = async () => {
+    setErrorMsg(null);
+    setOptimisticMessages(null);
     try {
+      const { session, token } = await getFreshToken();
       const res = await fetch('/api/agent/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           title: activePersona
@@ -216,9 +251,6 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
         if (session?.user && data.conversation) {
           await saveConversationToSupabase(
             session.user.id,
@@ -228,24 +260,25 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         }
         onConversationsChanged();
         setActiveConvId(data.conversation.id);
+      } else {
+        setActiveConvId(null);
       }
     } catch {
-      // Ignore error
+      setActiveConvId(null);
     }
   };
 
   const handleResetConversation = async () => {
     if (!activeConv) return;
+    setErrorMsg(null);
     try {
+      const { session, token } = await getFreshToken();
       const res = await fetch(`/api/agent/conversations/${activeConv.id}/reset`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
         if (session?.user && data.conversation) {
           await saveConversationToSupabase(
             session.user.id,
@@ -253,24 +286,23 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             data.conversation
           ).catch(() => null);
         }
+        setOptimisticMessages([]);
         onConversationsChanged();
       }
     } catch {
-      // Ignore
+      setErrorMsg('Unable to reset conversation right now.');
     }
   };
 
   const handleDeleteConversation = async (id: string) => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { session, token } = await getFreshToken();
       if (session?.user) {
         await deleteConversationInSupabase(session.user.id, id).catch(() => false);
       }
       const res = await fetch(`/api/agent/conversations/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         if (activeConvId === id) {
@@ -280,7 +312,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         onConversationsChanged();
       }
     } catch {
-      // Ignore
+      // Ignore delete error
     }
   };
 
@@ -288,29 +320,49 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
     const rawText = (promptText ?? inputMessage).trim();
     if (!rawText || sending) return;
     if (!promptText) setInputMessage('');
+    setErrorMsg(null);
     setSending(true);
 
+    const priorHistory = activeConv?.messages || [];
+    const tempUserMsg: AgentMessage = {
+      id: `msg-temp-${Date.now()}`,
+      role: 'user',
+      content: rawText,
+      timestamp: new Date().toISOString(),
+    };
+    setOptimisticMessages([...priorHistory, tempUserMsg]);
+
     try {
+      const { session, token } = await getFreshToken();
+      const cleanedContexts = additionalContexts
+        .filter((c) => c.content.trim())
+        .map((c) => ({
+          id: c.id,
+          title: c.title.trim(),
+          content: c.content.trim(),
+        }));
+      const combinedNote = serializeAdditionalContexts(additionalContexts);
+
       const res = await fetch('/api/agent/message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           conversationId: activeConv?.id || null,
           simulationId: selectedSimId || null,
           personaId: selectedPersonaId || null,
           message: rawText,
-          customContextNote: customAudienceContextNote.trim() || undefined,
+          customContextNote: combinedNote || undefined,
+          additionalContexts: cleanedContexts,
+          history: priorHistory,
           webSearch: webSearchEnabled,
         }),
       });
+
       if (res.ok) {
         const data = await res.json();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
         if (session?.user && data.conversation) {
           await saveConversationToSupabase(
             session.user.id,
@@ -318,11 +370,75 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             data.conversation
           ).catch(() => null);
         }
-        onConversationsChanged();
+        if (Array.isArray(data.conversation?.messages)) {
+          setOptimisticMessages(data.conversation.messages);
+        }
         if (data.conversation?.id) {
           setActiveConvId(data.conversation.id);
         }
+        onConversationsChanged();
+        return;
       }
+
+      // Direct stateless fallback via /api/research/search + /api/ai/generate if auth route fails
+      let fallbackSources: { title: string; uri: string }[] = [];
+      let rawSources: any[] = [];
+
+      if (webSearchEnabled) {
+        const searchRes = await fetch('/api/research/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ queries: [rawText] }),
+        }).catch(() => null);
+
+        if (searchRes && searchRes.ok) {
+          const searchData = await searchRes.json();
+          rawSources = Array.isArray(searchData.sources) ? searchData.sources : [];
+          fallbackSources = rawSources.map((s: any) => ({
+            title: s.title || s.url,
+            uri: s.url,
+          }));
+        }
+      }
+
+      const aiRes = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            ...priorHistory.map((m) => ({ role: m.role, content: m.content })),
+            { role: 'user', content: rawText },
+          ],
+          additionalContexts: cleanedContexts,
+          customNote: combinedNote,
+          systemPrompt:
+            rawSources.length > 0
+              ? `Live Web Sources:\n${rawSources
+                  .map(
+                    (s: any, i: number) =>
+                      `[${i + 1}] ${s.title} (${s.url}): ${s.excerpt || ''}`
+                  )
+                  .join('\n')}`
+              : undefined,
+        }),
+      });
+
+      if (aiRes.ok) {
+        const aiJson = await aiRes.json();
+        const fallbackAssistantMsg: AgentMessage = {
+          id: `msg-a-local-${Date.now()}`,
+          role: 'assistant',
+          content: aiJson.content || aiJson.result || 'Response generated.',
+          timestamp: new Date().toISOString(),
+          webSearchUsed: webSearchEnabled,
+          sources: fallbackSources,
+        };
+        setOptimisticMessages([...priorHistory, tempUserMsg, fallbackAssistantMsg]);
+      } else {
+        setErrorMsg('Unable to get a response from Clemir AI right now. Please try again.');
+      }
+    } catch {
+      setErrorMsg('Network issue while communicating with Clemir AI. Please try again.');
     } finally {
       setSending(false);
     }
@@ -336,12 +452,12 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 border border-[#E5E7EB] rounded-lg bg-white overflow-hidden min-h-[76vh]">
-      {/* Left Panel: Context & Agents Selectors + Conversation History */}
+      {/* Left Panel: Agent Settings, Additional Context Boxes & Conversation History */}
       <div className="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-[#E5E7EB] bg-[#F9FAFB] p-4 flex flex-col justify-between max-h-[76vh] overflow-y-auto">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-[#111827] tracking-wide">
-              ASSISTANT &amp; CONTEXT
+              CLEMIR AI AGENT
             </h2>
             <button
               type="button"
@@ -353,11 +469,11 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             </button>
           </div>
 
-          {/* Simulation Context Selector */}
+          {/* Simulation Selector */}
           <div>
             <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#111827] mb-1">
               <Layers className="w-3.5 h-3.5" />
-              <span>Conversation Mode / Context</span>
+              <span>Conversation Mode</span>
             </label>
             <select
               value={selectedSimId}
@@ -425,7 +541,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                   required
                   value={newAudienceName}
                   onChange={(e) => setNewAudienceName(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
+                  placeholder="e.g., Enterprise IT Buyers"
+                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs placeholder:text-[#9CA3AF]"
                 />
               </div>
               <div>
@@ -434,7 +551,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                   type="text"
                   value={newAudienceSegment}
                   onChange={(e) => setNewAudienceSegment(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
+                  placeholder="e.g., B2B SaaS, Healthcare"
+                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs placeholder:text-[#9CA3AF]"
                 />
               </div>
               <div>
@@ -443,7 +561,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                   type="text"
                   value={newAudienceDescription}
                   onChange={(e) => setNewAudienceDescription(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs"
+                  placeholder="Describe buying behavior and key needs"
+                  className="w-full px-2.5 py-1.5 border border-[#E5E7EB] rounded text-xs placeholder:text-[#9CA3AF]"
                 />
               </div>
               <button
@@ -455,16 +574,11 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             </form>
           )}
 
-          {/* Custom Context Override / Notes */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">
-              Additional Context or Goal (Optional)
-            </label>
-            <input
-              type="text"
-              value={customAudienceContextNote}
-              onChange={(e) => setCustomAudienceContextNote(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md text-[#111827] focus:outline-none focus:border-[#000000]"
+          {/* Multiple Additional Context Boxes */}
+          <div className="pt-2 border-t border-[#E5E7EB]">
+            <AdditionalContextManager
+              contexts={additionalContexts}
+              onChange={setAdditionalContexts}
             />
           </div>
 
@@ -487,7 +601,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
               )}
             </div>
 
-            <div className="space-y-1 max-h-56 overflow-y-auto">
+            <div className="space-y-1 max-h-48 overflow-y-auto">
               {conversations.length === 0 ? (
                 <p className="text-[11px] text-[#6B7280] py-1">
                   Send any message to start your first conversation.
@@ -531,18 +645,14 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Center Panel: Chat Messages & Composer */}
-      <div
-        className={`${
-          showRightContext ? 'lg:col-span-6' : 'lg:col-span-9'
-        } flex flex-col justify-between bg-white h-[76vh]`}
-      >
+      {/* Main Panel: Chat Messages & Composer (Full remaining width; Active Context panel removed) */}
+      <div className="lg:col-span-9 flex flex-col justify-between bg-white h-[76vh]">
         {/* Top Bar inside Agent */}
         <div className="px-5 py-3 border-b border-[#E5E7EB] flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <Bot className="w-4 h-4 text-[#111827] shrink-0" />
             <span className="text-xs font-semibold text-[#111827] truncate">
-              {activeConv?.title || 'Clamir Personal AI Assistant'}
+              {activeConv?.title || 'Clemir Personal AI Assistant'}
             </span>
             {activePersona ? (
               <span className="text-xs font-mono text-[#6B7280]">
@@ -570,26 +680,19 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 <ExternalLink className="w-3 h-3" />
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setShowRightContext(!showRightContext)}
-              className="hidden lg:inline-flex text-[11px] font-mono text-[#6B7280] hover:text-[#111827] cursor-pointer"
-            >
-              {showRightContext ? 'Hide Panel' : 'Show Panel'}
-            </button>
           </div>
         </div>
 
         {/* Messages Stream */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {!activeConv || activeConv.messages.length === 0 ? (
-            <div className="h-full flex flex-col justify-center max-w-xl mx-auto space-y-5">
+          {displayedMessages.length === 0 ? (
+            <div className="h-full flex flex-col justify-center max-w-2xl mx-auto space-y-5">
               <div className="text-center space-y-1.5">
                 <h3 className="text-base font-bold text-[#111827]">
-                  Your Personal AI Assistant &amp; Strategic Partner
+                  Clemir AI Assistant &amp; Strategic Partner
                 </h3>
                 <p className="text-xs text-[#6B7280] leading-relaxed">
-                  Ask anything—plan tasks and projects, work through complex problems and decisions, brainstorm ideas, or analyze{' '}
+                  Ask anything—plan tasks and projects, work through complex decisions, add multiple Additional Context boxes on the left, or analyze{' '}
                   <strong className="text-[#111827]">
                     {activeSimulation ? activeSimulation.name : 'your audience simulations'}
                   </strong>
@@ -622,7 +725,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             </div>
           ) : (
             <>
-              {activeConv.messages.map((msg) => {
+              {displayedMessages.map((msg) => {
                 const cleanContent = formatDisplayMessage(msg.content);
                 return (
                   <div
@@ -632,7 +735,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                     }`}
                   >
                     <div
-                      className={`max-w-2xl rounded-lg p-4 text-xs sm:text-sm leading-relaxed ${
+                      className={`max-w-3xl rounded-lg p-4 text-xs sm:text-sm leading-relaxed ${
                         msg.role === 'user'
                           ? 'bg-[#000000] text-white'
                           : 'bg-[#F9FAFB] text-[#111827] border border-[#E5E7EB]'
@@ -641,7 +744,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                       {msg.role === 'assistant' && (
                         <div className="flex items-center justify-between gap-4 pb-2 mb-2 border-b border-[#E5E7EB] text-[11px] font-mono text-[#6B7280]">
                           <span>
-                            Clamir Assistant
+                            Clemir Assistant
                             {msg.webSearchUsed ? ' · Live Web Research' : ''}
                           </span>
                           <button
@@ -701,8 +804,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
               {/* Interactive Follow-Up Suggestions */}
               {!sending &&
-                activeConv.messages.length > 0 &&
-                activeConv.messages[activeConv.messages.length - 1]?.role === 'assistant' && (
+                displayedMessages.length > 0 &&
+                displayedMessages[displayedMessages.length - 1]?.role === 'assistant' && (
                   <div className="pt-2">
                     <span className="block text-[10px] font-mono text-[#6B7280] mb-1.5">
                       CONTINUE THIS CONVERSATION
@@ -728,6 +831,11 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
               Thinking{webSearchEnabled ? ' and searching live web sources' : ''}...
             </div>
           )}
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md text-xs text-red-700 max-w-2xl">
+              {errorMsg}
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -745,7 +853,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                placeholder="Ask Clemir AI anything, plan tasks, or research with Web Search..."
+                className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
               <button
                 type="submit"
@@ -774,133 +883,12 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
               </button>
 
               <span className="text-[11px] text-[#6B7280]">
-                Ask about any topic, plan tasks, solve problems, or analyze simulations
+                Ask about any topic, apply Additional Context, or toggle Web Search
               </span>
             </div>
           </form>
         </div>
       </div>
-
-      {/* Right Panel: Active Context & Agents Details */}
-      {showRightContext && (
-        <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-[#E5E7EB] bg-[#F9FAFB] p-4 space-y-4 overflow-y-auto max-h-[76vh]">
-          <h3 className="text-xs font-bold text-[#111827] tracking-wide border-b border-[#E5E7EB] pb-2">
-            ACTIVE CONTEXT
-          </h3>
-
-          {activeSimulation ? (
-            <div className="space-y-3 text-xs">
-              <div>
-                <span className="text-[#6B7280] block text-[11px]">Selected Simulation</span>
-                <p className="font-semibold text-[#111827] mt-0.5">{activeSimulation.name}</p>
-              </div>
-
-              <div>
-                <span className="text-[#6B7280] block text-[11px]">Target Audience</span>
-                <p className="text-[#111827] mt-0.5">{activeSimulation.targetAudience}</p>
-              </div>
-
-              <div>
-                <span className="text-[#6B7280] block text-[11px]">Hypothesis</span>
-                <p className="text-[#111827] mt-0.5 leading-relaxed">{activeSimulation.hypothesis}</p>
-              </div>
-
-              {activeSimulation.results && (
-                <>
-                  <div className="p-3 bg-white border border-[#E5E7EB] rounded-md space-y-1.5 font-mono tabular-nums">
-                    <span className="font-sans font-semibold text-[#111827] block">
-                      Audience Sentiment
-                    </span>
-                    <div className="flex justify-between text-[11px]">
-                      <span>Positive: {activeSimulation.results.sentimentOverview.positive}%</span>
-                      <span>Neutral: {activeSimulation.results.sentimentOverview.neutral}%</span>
-                      <span>Negative: {activeSimulation.results.sentimentOverview.negative}%</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-[#6B7280] block text-[11px] mb-1">
-                      Evaluated Personas ({activeSimulation.results.personaBreakdown.length})
-                    </span>
-                    <div className="space-y-1.5">
-                      {activeSimulation.results.personaBreakdown.map((pb) => (
-                        <div
-                          key={pb.personaId}
-                          className="p-2.5 bg-white border border-[#E5E7EB] rounded text-xs"
-                        >
-                          <div className="flex justify-between font-semibold text-[#111827]">
-                            <span>{pb.personaName}</span>
-                            <span className="font-mono tabular-nums">{pb.acceptanceScore}/100</span>
-                          </div>
-                          <p className="text-[11px] text-[#6B7280] mt-0.5 line-clamp-2">
-                            {pb.mainTakeaway}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => onOpenSimulation(activeSimulation.id)}
-                  className="w-full py-2 px-3 text-xs font-semibold text-[#111827] bg-white border border-[#E5E7EB] rounded-md hover:bg-gray-100 cursor-pointer"
-                >
-                  Open Full Simulation Report
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSimId('')}
-                  className="w-full py-1.5 px-3 text-[11px] text-[#6B7280] hover:text-[#111827] cursor-pointer"
-                >
-                  Switch to General Assistant Mode
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-white border border-[#E5E7EB] rounded-md space-y-1.5">
-                <span className="font-semibold text-[#111827] block">
-                  Personal Assistant Mode Active
-                </span>
-                <p className="text-[#6B7280] leading-relaxed">
-                  You can converse naturally about any topic, plan tasks and projects, evaluate decisions, or solve problems.
-                </p>
-              </div>
-              <p className="text-[11px] text-[#6B7280]">
-                Want to focus on a specific study? Select any simulation or audience persona from the dropdowns on the left.
-              </p>
-            </div>
-          )}
-
-          {activePersona && (
-            <div className="pt-4 border-t border-[#E5E7EB] space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono text-[#6B7280] block">
-                  ACTIVE AUDIENCE PERSPECTIVE
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPersonaId('')}
-                  className="text-[10px] text-[#6B7280] hover:text-[#111827] underline cursor-pointer"
-                >
-                  Clear
-                </button>
-              </div>
-              <p className="font-bold text-[#111827]">{activePersona.name}</p>
-              <p className="text-[#6B7280]">{activePersona.tagline}</p>
-              <p className="text-[11px] text-[#111827]">Context: {activePersona.context}</p>
-              <div className="font-mono text-[11px] text-[#111827] space-y-0.5 pt-1">
-                <div>Price Sensitivity: {activePersona.priceSensitivity}</div>
-                <div>Decision Speed: {activePersona.decisionSpeed}</div>
-                <div>Brand Loyalty: {activePersona.brandLoyalty}/100</div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

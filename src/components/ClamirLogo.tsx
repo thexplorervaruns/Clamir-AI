@@ -21,7 +21,7 @@ export const ClamirSymbol: React.FC<{ sizePx?: number; inverted?: boolean; class
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`shrink-0 ${className}`}
-      aria-label="Clamir AI symbol"
+      aria-label="Clemir AI symbol"
     >
       {/* Comet 1: Central-left prominent comet with circular head and sharp diagonal trail */}
       <path d="M35 73 L100 16 L51 87 Z" fill={fill} />
@@ -74,7 +74,7 @@ export const ClamirLogo: React.FC<ClamirLogoProps> = ({
             inverted ? 'text-white' : 'text-[#000000]'
           }`}
         >
-          Clamir AI
+          Clemir AI
         </span>
       )}
     </span>

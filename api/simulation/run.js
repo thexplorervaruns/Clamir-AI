@@ -159,7 +159,7 @@ function buildDeterministicEvidenceSynthesis(sim, personaList, webResearch, open
     {
       claim: `Weighted Audience Utility Index = ${weightedAcceptance}/100 across ${totalAgents} total simulated agents (${personaBreakdown.length} persona segments).`,
       classification: "Calculated Output",
-      sourceTitle: "Clamir Multi-Attribute Utility Engine",
+      sourceTitle: "Clemir Multi-Attribute Utility Engine",
       sourceUrl: "",
     },
     {
@@ -405,7 +405,7 @@ export async function executeEvidenceBasedSimulation(params = {}) {
   // STEP 4: Generating results via OpenRouter (google/gemini-2.5-flash)
   await notifyStage("Generating results", 88, 2);
 
-  const systemInstruction = `You are the Clamir AI Evidence-Based Simulation & Research Engine powered by OpenRouter (google/gemini-2.5-flash).
+  const systemInstruction = `You are the Clemir AI Evidence-Based Simulation & Research Engine powered by OpenRouter (google/gemini-2.5-flash).
 CRITICAL ACCURACY & RELIABILITY RULES:
 1. NEVER invent numerical probabilities or fabricate statistics.
 2. NEVER claim 100% accuracy.

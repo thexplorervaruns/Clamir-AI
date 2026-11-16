@@ -98,7 +98,7 @@ export const PWAInstallModalButton: React.FC<{
           className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-[#6B7280] hover:text-[#111827] hover:bg-gray-100 rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer"
         >
           <Smartphone className="w-4 h-4 shrink-0" />
-          <span className="truncate">Install Clamir App</span>
+          <span className="truncate">Install Clemir App</span>
         </button>
       )}
 
@@ -108,7 +108,7 @@ export const PWAInstallModalButton: React.FC<{
             <div className="flex items-center justify-between pb-3 border-b border-[#E5E7EB]">
               <div className="flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-[#111827]" />
-                <h3 className="text-base font-semibold text-[#111827]">Install Clamir AI Application</h3>
+                <h3 className="text-base font-semibold text-[#111827]">Install Clemir AI Application</h3>
               </div>
               <button
                 type="button"
@@ -121,7 +121,7 @@ export const PWAInstallModalButton: React.FC<{
 
             <div className="mt-4 space-y-3 text-sm text-[#6B7280]">
               <p className="text-[#111827] font-medium">
-                Install Clamir AI on your device for instant standalone access, faster workspace loading, and offline report viewing.
+                Install Clemir AI on your device for instant standalone access, faster workspace loading, and offline report viewing.
               </p>
               {isIOS ? (
                 <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-md p-3.5 space-y-1.5 text-xs text-[#111827]">
@@ -133,7 +133,7 @@ export const PWAInstallModalButton: React.FC<{
                 <div className="bg-[#F9FAFB] border border-[#E5E7EB] rounded-md p-3.5 space-y-1.5 text-xs text-[#111827]">
                   <p className="font-semibold">Desktop / Mobile Browser Instructions:</p>
                   <p>1. Open this application in a top-level browser tab.</p>
-                  <p>2. Click the <strong>Install Clamir AI</strong> icon in your browser address bar, or open the browser menu and choose <strong>Install App / Add to Home Screen</strong>.</p>
+                  <p>2. Click the <strong>Install Clemir AI</strong> icon in your browser address bar, or open the browser menu and choose <strong>Install App / Add to Home Screen</strong>.</p>
                 </div>
               )}
             </div>

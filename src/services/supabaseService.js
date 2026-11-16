@@ -14,7 +14,9 @@ export function normalizeConsistentUserName(rawName, email = "") {
     lower.startsWith("tank ") ||
     lower === "varun (workspace owner)" ||
     lower === "clamir user" ||
-    lower === "clamir explorer";
+    lower === "clamir explorer" ||
+    lower === "clemir user" ||
+    lower === "clemir explorer";
 
   if (!isInvalidOrUnexpected) {
     return trimmed;
@@ -86,7 +88,7 @@ export function subscribeToAuthChanges(callback) {
 function mapWorkspaceRow(row) {
   return {
     id: row.id,
-    name: row.name || "Clamir Workspace",
+    name: row.name === "Clamir Workspace" ? "Clemir Workspace" : row.name || "Clemir Workspace",
     ownerId: row.user_id,
     createdAt: row.created_at || new Date().toISOString(),
     role: row.role || "Owner",
@@ -283,7 +285,7 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
       .from("workspaces")
       .insert({
         user_id: userId,
-        name: "Clamir Workspace",
+        name: "Clemir Workspace",
         role: "Owner",
         favorite_persona_ids: [
           "persona-experience-seekers",
@@ -378,7 +380,7 @@ export async function createWorkspaceInSupabase(userId, name) {
     .from("workspaces")
     .insert({
       user_id: userId,
-      name: String(name || "Clamir Workspace").trim(),
+      name: String(name || "Clemir Workspace").trim(),
       role: "Owner",
     })
     .select("*")

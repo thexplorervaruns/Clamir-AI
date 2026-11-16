@@ -1,5 +1,5 @@
 -- ============================================================================
--- CLAMIR AI — COMPLETE SUPABASE DATABASE SCHEMA & RLS POLICIES
+-- CLEMIR AI — COMPLETE SUPABASE DATABASE SCHEMA & RLS POLICIES
 -- Paste this entire script into the Supabase SQL Editor and click "Run".
 -- ============================================================================
 
@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL DEFAULT 'Clamir User',
+  name TEXT NOT NULL DEFAULT 'Clemir User',
   email TEXT NOT NULL,
   plan TEXT NOT NULL DEFAULT 'Explorer' CHECK (plan IN ('Explorer', 'Growth', 'Enterprise')),
   is_owner BOOLEAN NOT NULL DEFAULT FALSE,
@@ -51,7 +51,7 @@ CREATE POLICY "Users can delete own profile"
 CREATE TABLE IF NOT EXISTS public.workspaces (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL DEFAULT 'Clamir Workspace',
+  name TEXT NOT NULL DEFAULT 'Clemir Workspace',
   role TEXT NOT NULL DEFAULT 'Owner' CHECK (role IN ('Owner', 'Admin', 'Member')),
   favorite_persona_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
   deleted_builtin_persona_ids JSONB NOT NULL DEFAULT '[]'::jsonb,

@@ -185,7 +185,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
             <p className="text-xs font-mono tracking-widest text-[#6B7280] mb-5">
-              AUDIENCE SIMULATION PLATFORM · CLAMIR AI ENGINE
+              AUDIENCE SIMULATION PLATFORM · CLEMIR AI ENGINE
             </p>
             <h1
               className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold tracking-tight text-[#111827] leading-[1.08]"
@@ -194,7 +194,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
               Understand Your Audience Before Making Your Move.
             </h1>
             <p className="mt-6 text-base sm:text-lg text-[#6B7280] leading-relaxed max-w-2xl mx-auto">
-              Simulate customer reactions, define custom target audiences, explore pricing elasticity, and uncover high-confidence opportunities with Clamir AI.
+              Simulate customer reactions, define custom target audiences, explore pricing elasticity, and uncover high-confidence opportunities with Clemir AI.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
@@ -230,7 +230,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
             {/* Top Simulation Window Header */}
             <div className="bg-white border-b border-[#E5E7EB] px-6 py-4 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-xs font-semibold text-[#111827]">CLAMIR AI WORKSPACE</span>
+                <span className="font-mono text-xs font-semibold text-[#111827]">CLEMIR AI WORKSPACE</span>
                 <span className="text-[#E5E7EB]">/</span>
                 <h2 className="text-sm font-semibold text-[#111827] truncate">
                   {sampleSim.name}
@@ -410,7 +410,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
           <div className="max-w-2xl">
             <p className="text-xs font-mono tracking-wider text-[#6B7280]">WORKFLOW</p>
             <h2 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight text-[#111827]">
-              How Clamir AI Works
+              How Clemir AI Works
             </h2>
             <p className="mt-2 text-sm sm:text-base text-[#6B7280]">
               Move from raw business hypothesis to custom audience simulations and executive-ready insights in four structured steps.
@@ -882,7 +882,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
             Stop Guessing. Start Simulating.
           </h2>
           <p className="mt-3 text-sm sm:text-base text-neutral-300">
-            Make more informed decisions with Clamir AI.
+            Make more informed decisions with Clemir AI.
           </p>
           <div className="mt-8">
             <button
@@ -901,11 +901,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
       <footer className="bg-white border-t border-[#E5E7EB] py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-6 text-xs text-[#6B7280]">
-            {/* Left: © 2026 Clamir. All rights reserved. */}
+            {/* Left: © 2026 Clemir. All rights reserved. */}
             <div className="flex items-center justify-center md:justify-start gap-3">
               <ClamirLogo size="sm" />
               <span className="text-[#E5E7EB]">|</span>
-              <span className="font-medium text-[#111827]">© 2026 Clamir. All rights reserved.</span>
+              <span className="font-medium text-[#111827]">© 2026 Clemir. All rights reserved.</span>
             </div>
 
             {/* Center: Simulator and Audience Feedback. */}
@@ -975,7 +975,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
           <div className="w-full max-w-3xl bg-white border border-[#E5E7EB] rounded-lg p-6 my-8 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-[#E5E7EB]">
               <div>
-                <span className="text-xs font-mono text-[#6B7280]">SAMPLE SIMULATION BRIEF · CLAMIR AI</span>
+                <span className="text-xs font-mono text-[#6B7280]">SAMPLE SIMULATION BRIEF · CLEMIR AI</span>
                 <h3 className="text-lg font-bold text-[#111827]">{sampleSim.name}</h3>
               </div>
               <button
@@ -1032,7 +1032,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                   }}
                   className="px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 cursor-pointer"
                 >
-                  Open in Clamir AI Workspace
+                  Open in Clemir AI Workspace
                 </button>
               </div>
             </div>
@@ -1046,10 +1046,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
           <div className="w-full max-w-lg bg-white border border-[#E5E7EB] rounded-lg p-6">
             <div className="flex items-center justify-between pb-3 border-b border-[#E5E7EB]">
               <h3 className="text-base font-bold text-[#111827]">
-                {infoModal === 'docs' && 'Clamir AI Documentation & Methodology'}
+                {infoModal === 'docs' && 'Clemir AI Documentation & Methodology'}
                 {infoModal === 'privacy' && 'Privacy Policy'}
                 {infoModal === 'terms' && 'Terms of Service'}
-                {infoModal === 'contact' && 'Contact Clamir AI'}
+                {infoModal === 'contact' && 'Contact Clemir AI'}
               </h3>
               <button
                 type="button"
@@ -1063,7 +1063,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
               {infoModal === 'docs' && (
                 <>
                   <p className="text-[#111827] font-medium">
-                    Clamir AI Multi-Persona Simulation Architecture
+                    Clemir AI Multi-Persona Simulation Architecture
                   </p>
                   <p>
                     1. <strong>Simulation &amp; Custom Audience Setup:</strong> Define your hypothesis, custom target audiences, research material (TXT, MD, CSV, JSON, PDF, DOCX, or live URL), and structured question battery.
@@ -1079,7 +1079,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
               {infoModal === 'privacy' && (
                 <>
                   <p>
-                    Clamir AI isolates all workspace simulations, custom audiences, uploaded research materials, and AI agent conversations by workspace membership.
+                    Clemir AI isolates all workspace simulations, custom audiences, uploaded research materials, and AI agent conversations by workspace membership.
                   </p>
                   <p>
                     Uploaded research materials are processed strictly for simulation context extraction and are never shared across external workspaces.
@@ -1089,7 +1089,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
               {infoModal === 'terms' && (
                 <>
                   <p>
-                    By using Clamir AI, you acknowledge that persona responses, sentiment scores, and executive summaries represent AI-generated simulations designed for hypothesis testing and decision support.
+                    By using Clemir AI, you acknowledge that persona responses, sentiment scores, and executive summaries represent AI-generated simulations designed for hypothesis testing and decision support.
                   </p>
                   <p>
                     Users retain full ownership of all uploaded research materials, custom persona configurations, and exported reports.
@@ -1099,8 +1099,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
               {infoModal === 'contact' && (
                 <>
                   <p className="text-[#111827] font-medium">Enterprise &amp; Research Support</p>
-                  <p>Email: research@clamir.ai</p>
-                  <p>Enterprise Calibration &amp; Custom Integrations: enterprise@clamir.ai</p>
+                  <p>Email: research@clemir.ai</p>
+                  <p>Enterprise Calibration &amp; Custom Integrations: enterprise@clemir.ai</p>
                 </>
               )}
             </div>

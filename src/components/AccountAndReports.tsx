@@ -333,7 +333,7 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                   autoComplete="off"
                   value={profileEmail}
                   onChange={(e) => setProfileEmail(e.target.value)}
-                  placeholder="name@company.com"
+                  placeholder="Enter your email address (e.g., name@company.com)"
                   className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
@@ -446,7 +446,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                 type="text"
                 value={reportSearch}
                 onChange={(e) => setReportSearch(e.target.value)}
-                className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                placeholder="Search reports by title, simulation name, or summary..."
+                className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
             </div>
 
@@ -645,7 +646,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                           prev.map((item, i) => (i === idx ? { ...item, priceLabel: val } : item))
                         );
                       }}
-                      className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
+                      placeholder="e.g., $49"
+                      className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                     />
                   </div>
                   <div>
@@ -659,7 +661,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                           prev.map((item, i) => (i === idx ? { ...item, billingPeriod: val } : item))
                         );
                       }}
-                      className="w-full px-2.5 py-1.5 bg-white border border-[#E5E7EB] rounded"
+                      placeholder="e.g., /month"
+                      className="w-full px-2.5 py-1.5 bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                     />
                   </div>
                   <div>
@@ -675,7 +678,8 @@ export const AccountAndReports: React.FC<AccountAndReportsProps> = ({
                           )
                         );
                       }}
-                      className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
+                      placeholder="e.g., 50"
+                      className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                     />
                   </div>
                 </div>

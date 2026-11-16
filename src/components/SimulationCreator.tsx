@@ -673,7 +673,18 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder={
+                    simType === 'test_idea'
+                      ? 'e.g., AI Contract Review Assistant'
+                      : simType === 'ab_testing'
+                      ? 'e.g., Pricing Page Headline Comparison'
+                      : simType === 'usability_analysis'
+                      ? 'e.g., Self-Serve Onboarding Checkout Flow'
+                      : simType === 'pricing_analysis'
+                      ? 'e.g., Clemir Pro SaaS Annual Plans'
+                      : 'e.g., Q3 Enterprise Expansion Study'
+                  }
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -694,7 +705,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="text"
                   value={targetAudience}
                   onChange={(e) => setTargetAudience(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="e.g., B2B SaaS Founders, Finance Leads, or Retail Shoppers"
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
             </div>
@@ -711,7 +723,14 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                placeholder={
+                  simType === 'test_idea'
+                    ? 'Describe your product concept, core value proposition, and what problem it solves...'
+                    : simType === 'pricing_analysis'
+                    ? 'Describe your product tiers, target buyer value, and pricing questions...'
+                    : 'Describe what you are testing, key messaging, features, or scenario details...'
+                }
+                className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
             </div>
 
@@ -727,7 +746,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       rows={3}
                       value={optionADescription}
                       onChange={(e) => setOptionADescription(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="Describe Variant A (headline, offer, layout, or messaging)..."
+                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                   <div>
@@ -738,7 +758,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       rows={3}
                       value={optionBDescription}
                       onChange={(e) => setOptionBDescription(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="Describe Variant B (alternative copy, pricing, or visual approach)..."
+                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                 </div>
@@ -750,7 +771,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={comparisonCriteria}
                     onChange={(e) => setComparisonCriteria(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., Clarity of value proposition, trust, willingness to convert"
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -768,7 +790,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={marketOrIndustry}
                       onChange={(e) => setMarketOrIndustry(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="e.g., Healthcare SaaS, FinTech, E-Commerce"
+                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                   <div>
@@ -779,7 +802,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={productOrService}
                       onChange={(e) => setProductOrService(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="e.g., Automated Compliance Reporting Platform"
+                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                 </div>
@@ -808,7 +832,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={newExploreQuestion}
                       onChange={(e) => setNewExploreQuestion(e.target.value)}
-                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="Enter a market exploration question and click Add..."
+                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                     <button
                       type="button"
@@ -839,7 +864,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={websiteOrProductUrl}
                       onChange={(e) => setWebsiteOrProductUrl(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="e.g., https://yourproduct.com/pricing or Onboarding Flow v2"
+                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                   <div>
@@ -850,7 +876,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={userTask}
                       onChange={(e) => setUserTask(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="e.g., Sign up, select a plan, and launch a first project"
+                      className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                 </div>
@@ -879,7 +906,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                       type="text"
                       value={newUsabilityQuestion}
                       onChange={(e) => setNewUsabilityQuestion(e.target.value)}
-                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="Enter a usability question to evaluate and click Add..."
+                      className="flex-1 px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                     <button
                       type="button"
@@ -953,7 +981,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                               prev.map((t) => (t.id === tier.id ? { ...t, name: e.target.value } : t))
                             )
                           }
-                          className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                          placeholder="e.g., Starter"
+                          className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                         />
                       </div>
                       <div className="sm:col-span-2">
@@ -966,7 +995,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                               prev.map((t) => (t.id === tier.id ? { ...t, price: e.target.value } : t))
                             )
                           }
-                          className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#E5E7EB] rounded"
+                          placeholder="e.g., 29"
+                          className="w-full px-2.5 py-1.5 text-xs font-mono border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                         />
                       </div>
                       <div className="sm:col-span-6">
@@ -979,7 +1009,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                               prev.map((t) => (t.id === tier.id ? { ...t, features: e.target.value } : t))
                             )
                           }
-                          className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                          placeholder="e.g., Up to 10 simulations/mo, CSV export, team workspace"
+                          className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                         />
                       </div>
                       <button
@@ -1007,7 +1038,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={customerSegment}
                     onChange={(e) => setCustomerSegment(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., Mid-Market Operations Directors"
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -1018,7 +1050,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={customerProfile}
                     onChange={(e) => setCustomerProfile(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., Annual budget cycles, security-conscious, ROI-driven"
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -1064,7 +1097,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                             prev.map((item) => (item.id === cf.id ? { ...item, label: e.target.value } : item))
                           )
                         }
-                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                        placeholder="e.g., Distribution Channel"
+                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                       />
                     </div>
                     <div className="sm:col-span-3">
@@ -1099,7 +1133,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                             prev.map((item) => (item.id === cf.id ? { ...item, value: e.target.value } : item))
                           )
                         }
-                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded"
+                        placeholder={cf.fieldType === 'number' ? 'e.g., 100' : 'Enter field value...'}
+                        className="w-full px-2.5 py-1.5 text-xs border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                       />
                     </div>
                     <button
@@ -1124,7 +1159,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={hypothesis}
                   onChange={(e) => setHypothesis(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="e.g., Highlighting ROI metrics upfront increases sign-up intent..."
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
               <div className="flex flex-col justify-end">
@@ -1132,7 +1168,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={researchObjectives}
                   onChange={(e) => setResearchObjectives(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Research objectives (e.g., Identify top objections and willingness to pay)..."
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
             </div>
@@ -1146,7 +1183,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={processNotes}
                   onChange={(e) => setProcessNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Outline evaluation steps or workflow assumptions..."
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
               <div>
@@ -1157,7 +1195,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={comparisonNotes}
                   onChange={(e) => setComparisonNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Specify segments, competitors, or alternatives to compare..."
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
               <div>
@@ -1168,7 +1207,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={resultsNotes}
                   onChange={(e) => setResultsNotes(e.target.value)}
-                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="Define success criteria (e.g., >70% acceptance score)..."
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
             </div>
@@ -1181,7 +1221,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                 type="text"
                 value={researchContext}
                 onChange={(e) => setResearchContext(e.target.value)}
-                className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                placeholder="Add background context, market constraints, or brand positioning notes for AI personas..."
+                className="w-full px-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
             </div>
           </div>
@@ -1234,7 +1275,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  className="mt-3 w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="https://example.com/product-page"
+                  className="mt-3 w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
               <button
@@ -1362,7 +1404,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={q.text}
                     onChange={(e) => handleUpdateQuestion(q.id, { text: e.target.value })}
-                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                    placeholder="Enter the question your selected audience personas should answer..."
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                   />
                 </div>
 
@@ -1384,7 +1427,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                             .filter(Boolean),
                         });
                       }}
-                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="e.g., Very Likely, Somewhat Likely, Neutral, Unlikely"
+                      className="w-full px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                     />
                   </div>
                 )}
@@ -1454,7 +1498,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                               max={50}
                               value={agentCountInputs[sp.personaId] ?? ''}
                               onChange={(e) => handleAgentCountInputChange(sp.personaId, e.target.value)}
-                              className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded"
+                              placeholder="1-50"
+                              className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                             />
                           </div>
                           <button
@@ -1540,7 +1585,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                               max={50}
                               value={agentCountInputs[persona.id] ?? ''}
                               onChange={(e) => handleAgentCountInputChange(persona.id, e.target.value)}
-                              className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded tabular-nums"
+                              placeholder="1-50"
+                              className="w-16 px-2 py-1 text-xs font-mono text-right bg-white border border-[#E5E7EB] rounded tabular-nums placeholder:text-[#9CA3AF]"
                             />
                           </div>
                         )}
@@ -1686,7 +1732,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     required
                     value={customPersonaName}
                     onChange={(e) => setCustomPersonaName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., Enterprise Security Buyers"
+                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -1697,7 +1744,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     type="text"
                     value={customPersonaSegment}
                     onChange={(e) => setCustomPersonaSegment(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., B2B SaaS / FinTech"
+                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -1710,7 +1758,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   rows={2}
                   value={customPersonaTagline}
                   onChange={(e) => setCustomPersonaTagline(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                  placeholder="Describe their goals, pain points, priorities, and buying mindset..."
+                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -1722,7 +1771,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                   type="text"
                   value={customPersonaContext}
                   onChange={(e) => setCustomPersonaContext(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                  placeholder="e.g., Evaluating annual software contracts under tight IT budgets"
+                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -1761,7 +1811,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     max={100}
                     value={customBrandLoyalty}
                     onChange={(e) => setCustomBrandLoyalty(e.target.value)}
-                    className="w-full px-2 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
+                    placeholder="0-100"
+                    className="w-full px-2 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -1772,7 +1823,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     max={50}
                     value={customAgentCount}
                     onChange={(e) => setCustomAgentCount(e.target.value)}
-                    className="w-full px-2 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
+                    placeholder="1-50"
+                    className="w-full px-2 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>

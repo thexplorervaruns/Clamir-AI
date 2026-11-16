@@ -678,7 +678,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                   type="text"
                   value={demoQuestion}
                   onChange={(e) => setDemoQuestion(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+                  placeholder="e.g., Would you switch to a $29/mo annual plan with AI audience testing?"
+                  className="w-full px-3.5 py-2.5 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -710,7 +711,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                         type="text"
                         value={customAudienceName}
                         onChange={(e) => setCustomAudienceName(e.target.value)}
-                        className="w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md"
+                        placeholder="e.g., Bootstrapped SaaS Founders"
+                        className="w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                       />
                     </div>
                     <div>
@@ -752,7 +754,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ platformConfig, onGetS
                       type="text"
                       value={customAudienceDescription}
                       onChange={(e) => setCustomAudienceDescription(e.target.value)}
-                      className="w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md"
+                      placeholder="Describe their goals, budget constraints, and key pain points..."
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                     />
                   </div>
                 </div>

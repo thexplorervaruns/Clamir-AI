@@ -267,7 +267,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   autoComplete="off"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your full name"
+                  placeholder="Enter your full name (e.g., Alex Morgan)"
                   className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>
@@ -284,7 +284,11 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
+                placeholder={
+                  mode === 'forgot'
+                    ? 'Enter your registered email address'
+                    : 'Enter your email address (e.g., name@company.com)'
+                }
                 className="w-full pl-9 pr-3.5 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
             </div>
@@ -301,7 +305,11 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password (6+ characters)"
+                  placeholder={
+                    mode === 'login'
+                      ? 'Enter your password'
+                      : 'Create a password (6+ characters)'
+                  }
                   className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
                 <button
@@ -327,7 +335,7 @@ export const AuthEntryFlow: React.FC<AuthEntryFlowProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter your password"
+                  placeholder="Re-enter your password to confirm"
                   className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
                 />
               </div>

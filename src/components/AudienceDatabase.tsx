@@ -344,7 +344,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000]"
+            placeholder="Search audiences by name, segment, tag, or context..."
+            className="w-full pl-9 pr-3.5 py-2 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
           />
         </div>
 
@@ -673,7 +674,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     required
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., Early-Stage Startup Founders"
+                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -685,7 +687,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     maxLength={3}
                     value={formAvatarCode}
                     onChange={(e) => setFormAvatarCode(e.target.value)}
-                    className="w-full px-3 py-2 font-mono bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., ESF"
+                    className="w-full px-3 py-2 font-mono bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -699,7 +702,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     type="text"
                     value={formSegment}
                     onChange={(e) => setFormSegment(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., B2B SaaS / Technology"
+                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -710,7 +714,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     type="text"
                     value={formTags}
                     onChange={(e) => setFormTags(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="e.g., growth, budget-conscious, fast-moving"
+                    className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -721,7 +726,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                   type="text"
                   value={formTagline}
                   onChange={(e) => setFormTagline(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                  placeholder="e.g., Pragmatic builders focused on speed and measurable ROI"
+                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -733,7 +739,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                   rows={2}
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                  placeholder="Describe their role, daily workflow, goals, and product expectations..."
+                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -745,7 +752,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                   type="text"
                   value={formContext}
                   onChange={(e) => setFormContext(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md"
+                  placeholder="e.g., Evaluating new software tools during Q1 budget planning"
+                  className="w-full px-3 py-2 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                 />
               </div>
 
@@ -786,7 +794,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     max={100}
                     value={formBrandLoyalty}
                     onChange={(e) => setFormBrandLoyalty(e.target.value)}
-                    className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded"
+                    placeholder="0-100"
+                    className="w-full px-2.5 py-1.5 font-mono bg-white border border-[#E5E7EB] rounded placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -800,7 +809,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     rows={2}
                     value={formCharacteristics}
                     onChange={(e) => setFormCharacteristics(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="One per line (e.g., Prefers self-serve onboarding)"
+                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -811,7 +821,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     rows={2}
                     value={formPreferences}
                     onChange={(e) => setFormPreferences(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="One per line (e.g., Transparent monthly pricing)"
+                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -822,7 +833,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     rows={2}
                     value={formMotivations}
                     onChange={(e) => setFormMotivations(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="One per line (e.g., Save team engineering hours)"
+                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -833,7 +845,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     rows={2}
                     value={formDecisionFactors}
                     onChange={(e) => setFormDecisionFactors(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="One per line (e.g., Proven ROI and integrations)"
+                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>
@@ -847,7 +860,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     rows={2}
                     value={formConcerns}
                     onChange={(e) => setFormConcerns(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="One per line (e.g., Hidden fees or long setup time)"
+                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
                 <div>
@@ -856,7 +870,8 @@ export const AudienceDatabase: React.FC<AudienceDatabaseProps> = ({
                     rows={2}
                     value={formPurchasingBehavior}
                     onChange={(e) => setFormPurchasingBehavior(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md"
+                    placeholder="Describe how they research, trial, and approve purchases..."
+                    className="w-full px-3 py-1.5 bg-white border border-[#E5E7EB] rounded-md placeholder:text-[#9CA3AF]"
                   />
                 </div>
               </div>

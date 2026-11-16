@@ -692,3 +692,13 @@ export async function deleteConversationInSupabase(userId, conversationId) {
   return !error;
 }
 
+export async function clearAllConversationsInSupabase(userId, workspaceId) {
+  const { error } = await supabase
+    .from("agent_conversations")
+    .delete()
+    .eq("user_id", userId)
+    .eq("workspace_id", workspaceId);
+  return !error;
+}
+
+

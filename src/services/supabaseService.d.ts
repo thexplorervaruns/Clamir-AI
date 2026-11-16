@@ -134,3 +134,9 @@ export declare function deleteConversationInSupabase(
   conversationId: string
 ): Promise<boolean>;
 
+export declare function clearAllConversationsInSupabase(
+  userId: string,
+  workspaceId: string
+): Promise<boolean>;
+
+

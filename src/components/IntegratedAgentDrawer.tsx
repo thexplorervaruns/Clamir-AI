@@ -8,6 +8,7 @@ import {
   Maximize2,
   Plus,
   Send,
+  Trash2,
   X,
 } from 'lucide-react';
 import {
@@ -21,6 +22,7 @@ import {
   AdditionalContextManager,
   serializeAdditionalContexts,
 } from './AdditionalContextManager.tsx';
+import { cleanAiResponseText } from '../utils/cleanAiText.ts';
 import { supabase } from '../supabaseClient.js';
 import { saveConversationToSupabase } from '../services/supabaseService.js';
 
@@ -36,18 +38,8 @@ interface IntegratedAgentDrawerProps {
   activeSimulationId?: string | null;
   authToken: string;
   onConversationsChanged: () => void;
-}
-
-function cleanDisplayText(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/^\s*#{1,6}\s+/gm, '')
-    .replace(/^(\s*)\*\s+/gm, '$1- ')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*\n]+)\*/g, '$1')
-    .replace(/\*\*/g, '')
-    .trim();
+  onConversationUpserted?: (conv: AgentConversation) => void;
+  onConversationDeleted?: (conversationId: string) => void;
 }
 
 export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
@@ -62,10 +54,13 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
   activeSimulationId = null,
   authToken,
   onConversationsChanged,
+  onConversationUpserted,
+  onConversationDeleted,
 }) => {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(
     conversations[0]?.id || null
   );
+  const [isNewDraft, setIsNewDraft] = useState(false);
   const [selectedSimId, setSelectedSimId] = useState<string>(activeSimulationId || '');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
   const [showContextPanel, setShowContextPanel] = useState<boolean>(true);
@@ -85,22 +80,24 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
   }, [activeSimulationId]);
 
   useEffect(() => {
-    if (!selectedConvId && conversations.length > 0) {
+    if (!isNewDraft && !selectedConvId && conversations.length > 0) {
       setSelectedConvId(conversations[0].id);
     }
-  }, [conversations, selectedConvId]);
+  }, [conversations, selectedConvId, isNewDraft]);
 
-  const activeConv = conversations.find((c) => c.id === selectedConvId) || null;
+  const activeConv = isNewDraft
+    ? null
+    : conversations.find((c) => c.id === selectedConvId) || null;
   const displayedMessages =
     localMessages.length > 0 ? localMessages : activeConv?.messages || [];
 
   useEffect(() => {
     if (activeConv) {
       setLocalMessages(activeConv.messages || []);
-    } else {
+    } else if (isNewDraft) {
       setLocalMessages([]);
     }
-  }, [activeConv?.id, activeConv?.messages.length]);
+  }, [activeConv?.id, activeConv?.messages.length, isNewDraft]);
 
   useEffect(() => {
     if (isOpen) {
@@ -120,6 +117,7 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
     setInputMessage('');
     setErrorMsg(null);
     setSending(true);
+    setIsNewDraft(false);
 
     const optimisticUserMsg: AgentMessage = {
       id: `msg-temp-${Date.now()}`,
@@ -164,20 +162,30 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        if (session?.user && data.conversation) {
-          await saveConversationToSupabase(
-            session.user.id,
-            data.conversation.workspaceId,
-            data.conversation
-          ).catch(() => null);
+        if (data.conversation) {
+          const sanitizedConv: AgentConversation = {
+            ...data.conversation,
+            messages: Array.isArray(data.conversation.messages)
+              ? data.conversation.messages.map((m: AgentMessage) =>
+                  m.role === 'assistant' ? { ...m, content: cleanAiResponseText(m.content) } : m
+                )
+              : [],
+          };
+          setSelectedConvId(sanitizedConv.id);
+          setLocalMessages(sanitizedConv.messages);
+          if (onConversationUpserted) {
+            await onConversationUpserted(sanitizedConv);
+          } else if (session?.user) {
+            await saveConversationToSupabase(
+              session.user.id,
+              sanitizedConv.workspaceId,
+              sanitizedConv
+            ).catch(() => null);
+            onConversationsChanged();
+          } else {
+            onConversationsChanged();
+          }
         }
-        if (data.conversation?.id) {
-          setSelectedConvId(data.conversation.id);
-        }
-        if (Array.isArray(data.conversation?.messages)) {
-          setLocalMessages(data.conversation.messages);
-        }
-        onConversationsChanged();
         return;
       }
 
@@ -224,12 +232,29 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
         const assistantMsg: AgentMessage = {
           id: `msg-local-${Date.now()}`,
           role: 'assistant',
-          content: aiJson.content || aiJson.result || 'Unable to generate response.',
+          content: cleanAiResponseText(
+            aiJson.content || aiJson.result || 'Unable to generate response.'
+          ),
           timestamp: new Date().toISOString(),
           webSearchUsed: webSearchEnabled,
           sources: fallbackSources,
         };
-        setLocalMessages([...priorHistory, optimisticUserMsg, assistantMsg]);
+        const nextMessages = [...priorHistory, optimisticUserMsg, assistantMsg];
+        const savedConv: AgentConversation = {
+          id: activeConv?.id || crypto.randomUUID(),
+          workspaceId: activeConv?.workspaceId || 'ws-default',
+          title: activeConv?.title || rawText.slice(0, 48),
+          simulationId: selectedSimId || activeConv?.simulationId || null,
+          personaId: selectedPersonaId || activeConv?.personaId || null,
+          createdAt: activeConv?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: nextMessages,
+        };
+        setSelectedConvId(savedConv.id);
+        setLocalMessages(nextMessages);
+        if (onConversationUpserted) {
+          await onConversationUpserted(savedConv);
+        }
       } else {
         setErrorMsg('Unable to reach Clemir AI service. Please try again.');
       }
@@ -241,13 +266,32 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
   };
 
   const handleNewThread = () => {
+    setIsNewDraft(true);
     setSelectedConvId(null);
     setLocalMessages([]);
     setErrorMsg(null);
   };
 
+  const handleDeleteCurrentThread = async () => {
+    if (!activeConv) return;
+    const idToDelete = activeConv.id;
+    if (onConversationDeleted) {
+      await onConversationDeleted(idToDelete);
+    }
+    const remaining = conversations.filter((c) => c.id !== idToDelete);
+    if (remaining[0]) {
+      setIsNewDraft(false);
+      setSelectedConvId(remaining[0].id);
+      setLocalMessages(remaining[0].messages || []);
+    } else {
+      setIsNewDraft(true);
+      setSelectedConvId(null);
+      setLocalMessages([]);
+    }
+  };
+
   const handleCopy = (id: string, content: string) => {
-    navigator.clipboard.writeText(cleanDisplayText(content));
+    navigator.clipboard.writeText(cleanAiResponseText(content));
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1800);
   };
@@ -316,18 +360,39 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
                 : `Show Additional Context (${filledContextCount})`}
             </button>
             {conversations.length > 0 && (
-              <select
-                value={selectedConvId || ''}
-                onChange={(e) => setSelectedConvId(e.target.value || null)}
-                className="max-w-[190px] px-2 py-1 text-[11px] bg-white border border-[#E5E7EB] rounded text-[#111827]"
-              >
-                <option value="">New Conversation</option>
-                {conversations.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title || 'Conversation'}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={isNewDraft ? '' : selectedConvId || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      handleNewThread();
+                    } else {
+                      setIsNewDraft(false);
+                      setSelectedConvId(val);
+                    }
+                  }}
+                  className="max-w-[180px] px-2 py-1 text-[11px] bg-white border border-[#E5E7EB] rounded text-[#111827]"
+                >
+                  <option value="">New Chat</option>
+                  {conversations.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title || 'Conversation'} ({c.messages.length})
+                    </option>
+                  ))}
+                </select>
+                {activeConv && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteCurrentThread}
+                    className="p-1 text-[#6B7280] hover:text-red-600 bg-white border border-[#E5E7EB] rounded cursor-pointer"
+                    title="Delete selected conversation"
+                    aria-label="Delete selected conversation"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -382,7 +447,8 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
             </div>
           ) : (
             displayedMessages.map((msg) => {
-              const clean = cleanDisplayText(msg.content);
+              const clean =
+                msg.role === 'assistant' ? cleanAiResponseText(msg.content) : msg.content;
               return (
                 <div
                   key={msg.id}

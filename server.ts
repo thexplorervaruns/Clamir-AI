@@ -1075,7 +1075,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     const body = req.body || {};
 
     const newSim: Simulation = {
-      id: `sim-${Date.now()}`,
+      id: crypto.randomUUID(),
       workspaceId: body.workspaceId || activeWs.id,
       name: String(body.name || 'Untitled Simulation').trim(),
       type: body.type || 'test_idea',
@@ -1140,17 +1140,15 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
 
   app.delete('/api/simulations/:id', requireAuth, (req: AuthedRequest, res) => {
     const idx = db.simulations.findIndex((s) => s.id === req.params.id);
-    if (idx === -1) {
-      res.status(404).json({ error: 'Simulation not found.' });
-      return;
-    }
     const timer = activeJobTimers.get(req.params.id);
     if (timer) {
       clearTimeout(timer);
       activeJobTimers.delete(req.params.id);
     }
-    db.simulations.splice(idx, 1);
-    saveDatabase(db);
+    if (idx !== -1) {
+      db.simulations.splice(idx, 1);
+      saveDatabase(db);
+    }
     res.json({ ok: true });
   });
 
@@ -1327,9 +1325,9 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     const { title, simulationId, personaId } = req.body || {};
 
     const conv: AgentConversation = {
-      id: `conv-${Date.now()}`,
+      id: crypto.randomUUID(),
       workspaceId: activeWs.id,
-      title: String(title || 'New Research Conversation').trim(),
+      title: String(title || 'New Chat').trim(),
       simulationId: simulationId || null,
       personaId: personaId || null,
       createdAt: new Date().toISOString(),
@@ -1357,6 +1355,22 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     const idx = db.conversations.findIndex((c) => c.id === req.params.id);
     if (idx !== -1) {
       db.conversations.splice(idx, 1);
+      saveDatabase(db);
+    }
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/agent/conversations', requireAuth, (req: AuthedRequest, res) => {
+    const user = req.user!;
+    const requestedWsId = String(req.query.workspaceId || '').trim();
+    const userWorkspaces = db.workspaces.filter((w) => w.ownerId === user.id);
+    const activeWs =
+      (requestedWsId && userWorkspaces.find((w) => w.id === requestedWsId)) ||
+      userWorkspaces[0] ||
+      db.workspaces[0];
+
+    if (activeWs) {
+      db.conversations = db.conversations.filter((c) => c.workspaceId !== activeWs.id);
       saveDatabase(db);
     }
     res.json({ ok: true });
@@ -1397,7 +1411,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     let conv = db.conversations.find((c) => c.id === conversationId);
     if (!conv) {
       conv = {
-        id: conversationId || `conv-${Date.now()}`,
+        id: conversationId || crypto.randomUUID(),
         workspaceId: activeWs.id,
         title: cleanMsg.slice(0, 48),
         simulationId: simulationId || null,

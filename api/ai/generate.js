@@ -13,33 +13,80 @@ const FALLBACK_FREE_MODEL = "openrouter/free";
 export function cleanNaturalAssistantText(rawText) {
   if (!rawText || typeof rawText !== "string") return "";
 
-  return rawText
-    // Strip <think>...</think> or <reasoning>...</reasoning> blocks
+  let cleaned = rawText
+    // Decode HTML entities first so encoded tags/slashes get stripped cleanly
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#x2F;|&#47;/gi, "/")
+    .replace(/&nbsp;/gi, " ")
+    // Convert escaped sequences if returned literally
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, " ")
+    .replace(/\\\//g, "/")
+    // Strip reasoning blocks
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, "")
-    // Strip HTML/XML tags if any
-    .replace(/<\/?[a-z][a-z0-9]*[^<>]*>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .replace(/\[think\][\s\S]*?\[\/think\]/gi, "")
+    .replace(/\[reasoning\][\s\S]*?\[\/reasoning\]/gi, "")
+    // Strip LLM special tokens
+    .replace(/<\|[^|>]*\|>/g, "")
+    .replace(/<｜[^｜>]*｜>/g, "")
+    .replace(/\[\/?(?:INST|SYS|s|THOUGHT|ANSWER|RESPONSE|OUT|ASSISTANT|USER)\]/gi, "")
+    // Convert block tags to line breaks before stripping all tags
+    .replace(/<\/?(?:br|p|div|li|tr|h[1-6])\b[^>]*\/?>/gi, "\n")
+    .replace(/<\/?[a-zA-Z][a-zA-Z0-9:_-]*[^>]*\/?>/g, "")
+    .replace(/(?:^|\s)\/[a-zA-Z][a-zA-Z0-9_-]*>/g, " ")
+    .replace(/<\/[a-zA-Z][a-zA-Z0-9_-]*/g, "")
+    // Remove robotic bracket prefixes & citation numbers
+    .replace(/^\[Custom Audience & Context Note:[^\]]*\]\s*/gim, "")
+    .replace(/\[Simulated Persona Statement\]\s*/gi, "")
+    .replace(/\[Simulated [^\]]*Perspective\]:?\s*/gi, "")
+    .replace(/\[Context\s*\d*:[^\]]*\]\s*/gi, "")
+    .replace(/\[Source\s*\d+\]/gi, "")
+    .replace(/\[\d{1,2}\]/g, "")
     // Strip markdown images ![alt](url) and clean markdown links [label](url) -> label
     .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1")
-    // Remove robotic bracket prefixes
-    .replace(/\[Simulated Persona Statement\]\s*/gi, "")
-    .replace(/\[Simulated [^\]]*Perspective\]:?\s*/gi, "")
-    .replace(/\[Source\s*\d+\]/gi, "")
-    // Remove markdown headings (### Title -> Title)
+    // Strip raw URLs inside prose (citations render separately as clickable links)
+    .replace(/\(\s*https?:\/\/[^\s)]+\s*\)/gi, "")
+    .replace(/https?:\/\/[^\s<>()]+/gi, "")
+    // Remove markdown headings, fences, code ticks, quotes, and bold/italic asterisks
+    .replace(/^\s*```[a-zA-Z0-9_-]*\s*$/gm, "")
+    .replace(/```/g, "")
+    .replace(/`([^`]+)`/g, "$1")
     .replace(/^\s*#{1,6}\s+/gm, "")
-    // Convert markdown bullet "* item" at start of line to "- item"
+    .replace(/^\s*[-*_]{3,}\s*$/gm, "")
+    .replace(/^\s*>\s?/gm, "")
     .replace(/^(\s*)\*\s+/gm, "$1- ")
-    // Remove bold/italic asterisks and underscores (**text**, *text*, __text__)
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*\n]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
-    .replace(/\*\*/g, "")
-    // Remove code fences around plain text
-    .replace(/^```(?:text|markdown)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    // Normalize spaces/newlines
+    .replace(/\*\*/g, "");
+
+  // Replace "/" symbols in prose so responses read cleanly as normal text
+  cleaned = cleaned
+    .replace(/\/{2,}/g, " ")
+    .replace(/(\d+)\s*\/\s*100\b/g, "$1 out of 100")
+    .replace(/(\$\d[\d,.]*)\s*\/\s*(month|mo|year|yr|week|day|user|seat)\b/gi, "$1 per $2")
+    .replace(/\b24\s*\/\s*7\b/g, "around the clock")
+    .replace(/\band\s*\/\s*or\b/gi, "and or")
+    .replace(/\bpros\s*\/\s*cons\b/gi, "pros and cons")
+    .replace(/\bA\s*\/\s*B\b/g, "A vs B")
+    .replace(/\b([A-Za-z0-9]+)\s*\/\s*([A-Za-z0-9]+)\b/g, "$1 or $2")
+    .replace(/\b([A-Za-z0-9]+)\s*\/\s*([A-Za-z0-9]+)\b/g, "$1 or $2")
+    .replace(/\s+\/\s+/g, ", ")
+    .replace(/(^|\s)\/+(\s|$)/g, " ")
+    .replace(/\//g, " ");
+
+  return cleaned
+    .replace(/[ \t]+([.,!?;:])/g, "$1")
     .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +\n/g, "\n")
+    .replace(/\n +/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -339,9 +386,9 @@ export function buildContextualAssistantFallback({
   ) {
     if (simulation && simulation.abComparison) {
       const ab = simulation.abComparison;
-      return [
+      return cleanNaturalAssistantText([
         `Looking at your comparison in "${simulation.name}" (${ab.optionALabel} vs. ${ab.optionBLabel}):`,
-        `${ab.optionBLabel} scored ${ab.optionBScore}/100 compared to ${ab.optionAScore}/100 for ${ab.optionALabel}. ${ab.overallVerdict}`,
+        `${ab.optionBLabel} scored ${ab.optionBScore} out of 100 compared to ${ab.optionAScore} out of 100 for ${ab.optionALabel}. ${ab.overallVerdict}`,
         `- Where ${ab.optionALabel} works best: ${ab.optionAStrengths.join(", ")}. Its main limitation is ${ab.optionAWeaknesses.join(", ").toLowerCase()}.`,
         `- Where ${ab.optionBLabel} works best: ${ab.optionBStrengths.join(", ")}. Its main watch-out is ${ab.optionBWeaknesses.join(", ").toLowerCase()}.`,
         `My recommendation: Go with ${
@@ -349,7 +396,7 @@ export function buildContextualAssistantFallback({
         } as your primary direction, while borrowing the clearest elements from the alternative to reduce onboarding friction.${
           hasAdditionalContext ? `\n\nApplied Context:\n${contextSummaryBlock}` : ""
         }`,
-      ].join("\n\n");
+      ].join("\n\n"));
     }
 
     return cleanNaturalAssistantText([
@@ -380,7 +427,7 @@ export function buildContextualAssistantFallback({
         simulation.results.recommendations?.[0]?.explanation ||
         "demonstrating concrete outcomes early in the user journey";
 
-      return [
+      return cleanNaturalAssistantText([
         `To solve the main friction point identified in "${simulation.name}":`,
         `The biggest obstacle surfacing across your audience is ${topConcern.toLowerCase()}.`,
         `Here is how to fix it step by step:\n1. Address the objection upfront: ${topMitigation}\n2. Reduce perceived risk: Give evaluators a clear, low-commitment way to verify results before asking for a long-term commitment.\n3. Focus on your highest-conviction segment first so your messaging stays sharp.`,
@@ -388,13 +435,13 @@ export function buildContextualAssistantFallback({
         `Would you like help drafting the updated copy or workflow changes to test this fix?`,
       ]
         .filter(Boolean)
-        .join("\n\n");
+        .join("\n\n"));
     }
 
     return cleanNaturalAssistantText([
       `Let's break down this problem and find the most direct solution for: "${msg}"`,
       hasAdditionalContext ? `Operating Context Considered:\n${contextSummaryBlock}` : "",
-      `1. Isolate the Root Cause\nMost bottlenecks come from one of three places: unclear inputs/expectations, too many steps in the process, or a mismatch between the solution and the actual constraint. Identify the exact step where progress slows down or breaks.`,
+      `1. Isolate the Root Cause\nMost bottlenecks come from one of three places: unclear inputs or expectations, too many steps in the process, or a mismatch between the solution and the actual constraint. Identify the exact step where progress slows down or breaks.`,
       `2. Simplify Before Adding More\nInstead of adding complexity, remove or bypass the part of the process that is causing friction. Ask: what is the simplest change that would resolve 80% of this issue today?`,
       `3. Test a Small, Fast Fix\nPick one concrete adjustment you can implement immediately, measure whether the outcome improves, and iterate from there.`,
       `Share a bit more detail about what you have already tried or where you are getting stuck, and we will work through the exact solution together.`,
@@ -410,7 +457,7 @@ export function buildContextualAssistantFallback({
       lower
     )
   ) {
-    return [
+    return cleanNaturalAssistantText([
       `Speaking from the perspective of ${persona.name} (${persona.segment}):`,
       `When we look at "${msg}", our mindset is shaped by ${persona.tagline.toLowerCase()} Because our price sensitivity is ${persona.priceSensitivity.toLowerCase()} and our decision speed is ${persona.decisionSpeed.toLowerCase()}, we pay close attention to ${persona.decisionFactors.slice(0, 2).join(" and ").toLowerCase()}.`,
       `Our main hesitation is usually ${
@@ -422,7 +469,7 @@ export function buildContextualAssistantFallback({
       `What specific part of your offer or workflow would you like us to evaluate next?`,
     ]
       .filter(Boolean)
-      .join("\n\n");
+      .join("\n\n"));
   }
 
   // 9. Focused Simulation Analysis (when user asks about simulation results)
@@ -437,13 +484,13 @@ export function buildContextualAssistantFallback({
     const personaLines = (r.personaBreakdown || [])
       .map(
         (pb) =>
-          `- ${pb.personaName} (${pb.acceptanceScore}/100, ${pb.overallReaction}): ${pb.mainTakeaway}`
+          `- ${pb.personaName} (${pb.acceptanceScore} out of 100, ${pb.overallReaction}): ${pb.mainTakeaway}`
       )
       .join("\n");
 
     const topRec = r.recommendations?.[0];
 
-    return [
+    return cleanNaturalAssistantText([
       `Here is a clear breakdown of the findings for "${simulation.name}":`,
       `Core Takeaway\n${r.executiveSummary.mainFinding}`,
       `How Each Audience Segment Responded\n${personaLines}`,
@@ -454,7 +501,7 @@ export function buildContextualAssistantFallback({
       `Would you like to dive deeper into a specific segment's objections, or turn these recommendations into an implementation checklist?`,
     ]
       .filter(Boolean)
-      .join("\n\n");
+      .join("\n\n"));
   }
 
   // 10. General open-topic conversation & Additional Context synthesis
@@ -549,7 +596,7 @@ export async function generateSmartAssistantResponse({
     `CORE BEHAVIOR & VOICE RULES:`,
     `1. Understand every message deeply, maintain full conversation context across turns, and respond directly to what the user actually asked.`,
     `2. Support open conversations about ANY topic: everyday questions, task and project planning, problem-solving, decision-making, brainstorming, writing, technical concepts, business strategy, and audience simulation analysis.`,
-    `3. Write in clean, natural, warm, intelligent human prose. NEVER use markdown asterisks (**), hashtags (###), XML/HTML tags, bracketed labels like [Simulated Persona Statement], or robotic filler.`,
+    `3. Write in clean, natural, warm, intelligent human prose. NEVER use XML or HTML tags, markdown asterisks (**), hashtags (#), code backticks, bracketed labels, raw URLs inside sentences, or slash (/) separators in your text.`,
     `4. When organizing steps or points, use simple numbered lists (1. 2. 3.) or plain dashes (- ) with clear paragraph spacing.`,
     `5. If the user provided Additional Context boxes below, treat them as primary background knowledge and constraints—actively apply and reference them naturally.`,
     `6. If live Web Research sources are provided below, synthesize their concrete findings cleanly in your answer.`,

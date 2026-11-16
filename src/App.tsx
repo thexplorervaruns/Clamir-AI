@@ -51,17 +51,69 @@ import {
 } from './data/seedData.ts';
 import { supabase } from './supabaseClient.js';
 import {
+  clearAllConversationsInSupabase,
   clearRecentSearchesInSupabase,
   createWorkspaceInSupabase,
+  deleteConversationInSupabase,
   deleteRecentSearchInSupabase,
   deleteSimulationInSupabase,
   loadUserWorkspaceFromSupabase,
   logRecentSearchToSupabase,
   normalizeConsistentUserName,
   renameWorkspaceInSupabase,
+  saveConversationToSupabase,
   saveSimulationToSupabase,
   signOutFromSupabase,
 } from './services/supabaseService.js';
+
+function loadLocalJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveLocalJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function mergeConversationLists(
+  lists: AgentConversation[][],
+  deletedIds: string[]
+): AgentConversation[] {
+  const deletedSet = new Set(deletedIds);
+  const map = new Map<string, AgentConversation>();
+
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const conv of list) {
+      if (!conv || !conv.id || deletedSet.has(conv.id)) continue;
+      const existing = map.get(conv.id);
+      if (!existing) {
+        map.set(conv.id, conv);
+      } else {
+        const existingLen = Array.isArray(existing.messages) ? existing.messages.length : 0;
+        const nextLen = Array.isArray(conv.messages) ? conv.messages.length : 0;
+        const existingTime = new Date(existing.updatedAt || 0).getTime();
+        const nextTime = new Date(conv.updatedAt || 0).getTime();
+        if (nextLen > existingLen || (nextLen === existingLen && nextTime >= existingTime)) {
+          map.set(conv.id, conv);
+        }
+      }
+    }
+  }
+
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+  );
+}
 
 type AppView = 'landing' | 'auth' | 'workspace';
 type WorkspaceTab = 'dashboard' | 'simulations' | 'agent' | 'audience' | 'account' | 'owner';
@@ -144,7 +196,7 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Load workspace data from Supabase first, then sync with backend API
+  // Load workspace data from Supabase, backend API, and local backup without losing chat history or restoring deleted items
   const fetchWorkspaceState = useCallback(
     async (token: string, wsId?: string) => {
       if (!token) return;
@@ -153,8 +205,17 @@ export default function App() {
           data: { session },
         } = await supabase.auth.getSession();
 
+        const userKey = session?.user?.id || user?.id || 'default';
+        const deletedSimIds = loadLocalJson<string[]>(`clemir_deleted_sim_ids_${userKey}`, []);
+        const deletedConvIds = loadLocalJson<string[]>(`clemir_deleted_conv_ids_${userKey}`, []);
+        const cachedLocalConvs = loadLocalJson<AgentConversation[]>(
+          `clemir_conversations_${userKey}`,
+          []
+        );
+
+        let supaData: any = null;
         if (session?.user && session.access_token === token) {
-          const supaData = await loadUserWorkspaceFromSupabase(session.user, wsId);
+          supaData = await loadUserWorkspaceFromSupabase(session.user, wsId);
           if (supaData) {
             setUser((prev) => ({
               ...supaData.user,
@@ -165,13 +226,13 @@ export default function App() {
             }));
             setWorkspaces(supaData.workspaces);
             setActiveWorkspaceId(supaData.activeWorkspaceId);
-            if (supaData.simulations.length > 0) {
-              setSimulations(supaData.simulations);
+            const filteredSupaSims = (supaData.simulations || []).filter(
+              (s: Simulation) => !deletedSimIds.includes(s.id)
+            );
+            if (filteredSupaSims.length > 0) {
+              setSimulations(filteredSupaSims);
             }
             setPersonas(supaData.personas);
-            if (supaData.conversations.length > 0) {
-              setConversations(supaData.conversations);
-            }
             if (supaData.reports.length > 0) {
               setReports(supaData.reports);
             }
@@ -187,6 +248,20 @@ export default function App() {
         });
         if (res.ok) {
           const data = await res.json();
+          const finalUserKey = session?.user?.id || data.user?.id || userKey;
+          const finalDeletedSims = loadLocalJson<string[]>(
+            `clemir_deleted_sim_ids_${finalUserKey}`,
+            deletedSimIds
+          );
+          const finalDeletedConvs = loadLocalJson<string[]>(
+            `clemir_deleted_conv_ids_${finalUserKey}`,
+            deletedConvIds
+          );
+          const finalLocalConvs = loadLocalJson<AgentConversation[]>(
+            `clemir_conversations_${finalUserKey}`,
+            cachedLocalConvs
+          );
+
           setUser((prev) => ({
             ...data.user,
             name: normalizeConsistentUserName(
@@ -196,20 +271,44 @@ export default function App() {
           }));
           setWorkspaces(data.workspaces);
           setActiveWorkspaceId(data.activeWorkspaceId);
-          setSimulations(data.simulations);
+
+          // Merge Supabase + backend simulations while respecting manual deletions
+          const simMap = new Map<string, Simulation>();
+          for (const sim of [...(supaData?.simulations || []), ...(data.simulations || [])]) {
+            if (sim && sim.id && !finalDeletedSims.includes(sim.id)) {
+              simMap.set(sim.id, sim);
+            }
+          }
+          setSimulations(Array.from(simMap.values()));
+
           setPersonas(data.personas);
-          setConversations(data.conversations);
+
+          // Merge Supabase + backend + cached localStorage conversations (NEVER auto-delete)
+          const mergedConversations = mergeConversationLists(
+            [supaData?.conversations || [], data.conversations || [], finalLocalConvs],
+            finalDeletedConvs
+          );
+          setConversations(mergedConversations);
+          saveLocalJson(`clemir_conversations_${finalUserKey}`, mergedConversations);
+
           setReports(data.reports);
           setRecentSearches(data.recentSearches);
           if (data.platformConfig) {
             setPlatformConfig(data.platformConfig);
           }
+        } else {
+          const mergedFallback = mergeConversationLists(
+            [supaData?.conversations || [], cachedLocalConvs],
+            deletedConvIds
+          );
+          setConversations(mergedFallback);
+          saveLocalJson(`clemir_conversations_${userKey}`, mergedFallback);
         }
       } catch {
         // Keep current state on offline
       }
     },
-    []
+    [user?.id]
   );
 
   // Supabase Session Protection & Auth State Listener
@@ -464,17 +563,136 @@ export default function App() {
   };
 
   const handleDeleteSimulation = async (simId: string) => {
-    if (user) {
-      await deleteSimulationInSupabase(user.id, simId).catch(() => false);
+    const userKey = user?.id || 'default';
+    const deletedSimIds = loadLocalJson<string[]>(`clemir_deleted_sim_ids_${userKey}`, []);
+    if (!deletedSimIds.includes(simId)) {
+      saveLocalJson(`clemir_deleted_sim_ids_${userKey}`, [...deletedSimIds, simId]);
     }
-    const res = await fetch(`/api/simulations/${simId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${authToken}` },
+
+    // Immediately remove from UI state so manual deletion feels instant
+    setSimulations((prev) => prev.filter((s) => s.id !== simId));
+    setConfirmDeleteSimId(null);
+    if (selectedSimId === simId) setSelectedSimId(null);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const liveToken = session?.access_token || authToken;
+      const uid = session?.user?.id || user?.id;
+
+      if (uid) {
+        await deleteSimulationInSupabase(uid, simId).catch(() => false);
+      }
+      if (liveToken) {
+        await fetch(`/api/simulations/${encodeURIComponent(simId)}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${liveToken}` },
+        }).catch(() => null);
+        fetchWorkspaceState(liveToken, activeWorkspaceId);
+      }
+    } catch {
+      // Deletion already reflected in local state & deletion tracker
+    }
+  };
+
+  // Persistent Chat History Handlers (No automatic deletion)
+  const handleUpsertConversation = async (conv: AgentConversation) => {
+    const normalizedConv: AgentConversation = {
+      ...conv,
+      workspaceId: conv.workspaceId || activeWorkspaceId || 'ws-default',
+    };
+    const userKey = user?.id || 'default';
+    const deletedConvIds = loadLocalJson<string[]>(`clemir_deleted_conv_ids_${userKey}`, []).filter(
+      (id) => id !== normalizedConv.id
+    );
+    saveLocalJson(`clemir_deleted_conv_ids_${userKey}`, deletedConvIds);
+
+    setConversations((prev) => {
+      const next = mergeConversationLists([[normalizedConv], prev], deletedConvIds);
+      saveLocalJson(`clemir_conversations_${userKey}`, next);
+      return next;
     });
-    if (res.ok) {
-      setConfirmDeleteSimId(null);
-      if (selectedSimId === simId) setSelectedSimId(null);
-      fetchWorkspaceState(authToken, activeWorkspaceId);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        await saveConversationToSupabase(
+          session.user.id,
+          normalizedConv.workspaceId,
+          normalizedConv
+        ).catch(() => null);
+      }
+    } catch {
+      // Kept safely in local state & localStorage
+    }
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    const userKey = user?.id || 'default';
+    const deletedConvIds = loadLocalJson<string[]>(`clemir_deleted_conv_ids_${userKey}`, []);
+    if (!deletedConvIds.includes(conversationId)) {
+      saveLocalJson(`clemir_deleted_conv_ids_${userKey}`, [...deletedConvIds, conversationId]);
+    }
+
+    setConversations((prev) => {
+      const next = prev.filter((c) => c.id !== conversationId);
+      saveLocalJson(`clemir_conversations_${userKey}`, next);
+      return next;
+    });
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const liveToken = session?.access_token || authToken;
+      if (session?.user) {
+        await deleteConversationInSupabase(session.user.id, conversationId).catch(() => false);
+      }
+      if (liveToken) {
+        await fetch(`/api/agent/conversations/${encodeURIComponent(conversationId)}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${liveToken}` },
+        }).catch(() => null);
+      }
+    } catch {
+      // Deletion already reflected in local state & localStorage
+    }
+  };
+
+  const handleClearAllConversations = async () => {
+    const userKey = user?.id || 'default';
+    const existingDeleted = loadLocalJson<string[]>(`clemir_deleted_conv_ids_${userKey}`, []);
+    const allIdsToDelete = Array.from(
+      new Set([...existingDeleted, ...conversations.map((c) => c.id)])
+    );
+    saveLocalJson(`clemir_deleted_conv_ids_${userKey}`, allIdsToDelete);
+    saveLocalJson(`clemir_conversations_${userKey}`, []);
+    setConversations([]);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const liveToken = session?.access_token || authToken;
+      if (session?.user) {
+        await clearAllConversationsInSupabase(session.user.id, activeWorkspaceId).catch(
+          () => false
+        );
+      }
+      if (liveToken) {
+        await fetch(
+          `/api/agent/conversations?workspaceId=${encodeURIComponent(activeWorkspaceId)}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${liveToken}` },
+          }
+        ).catch(() => null);
+      }
+    } catch {
+      // Cleared cleanly
     }
   };
 
@@ -1085,6 +1303,7 @@ export default function App() {
                       setActiveTab('agent');
                     }}
                     onReportSaved={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
+                    onDelete={(simId) => setConfirmDeleteSimId(simId)}
                   />
                 ) : (
                   <div className="space-y-6">
@@ -1225,6 +1444,9 @@ export default function App() {
                 initialPersonaId={agentFocusPersonaId}
                 authToken={authToken}
                 onConversationsChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
+                onConversationUpserted={handleUpsertConversation}
+                onConversationDeleted={handleDeleteConversation}
+                onClearAllConversations={handleClearAllConversations}
                 onPersonasChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
                 onOpenSimulation={handleOpenSimulation}
               />
@@ -1422,6 +1644,8 @@ export default function App() {
         activeSimulationId={agentFocusSimId || selectedSimId}
         authToken={authToken}
         onConversationsChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}
+        onConversationUpserted={handleUpsertConversation}
+        onConversationDeleted={handleDeleteConversation}
       />
 
       {/* DELETE SIMULATION CONFIRMATION DIALOG */}

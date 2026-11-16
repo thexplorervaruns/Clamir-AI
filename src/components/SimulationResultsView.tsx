@@ -8,6 +8,7 @@ import {
   FileText,
   Square,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { Simulation, SimulationStage } from '../types/clamir.ts';
 import { exportSimulationReport } from '../utils/reportExporter.ts';
@@ -22,6 +23,7 @@ interface SimulationResultsViewProps {
   onUpdated: (sim: Simulation) => void;
   onOpenInAgent: (simId: string) => void;
   onReportSaved: () => void;
+  onDelete?: (simId: string) => void;
 }
 
 const ORDERED_STAGES: SimulationStage[] = [
@@ -40,6 +42,7 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
   onUpdated,
   onOpenInAgent,
   onReportSaved,
+  onDelete,
 }) => {
   const [selectedPersonaTab, setSelectedPersonaTab] = useState<string>(
     simulation.results?.personaBreakdown[0]?.personaId || ''
@@ -201,6 +204,17 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
                 </button>
               ))}
             </>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(simulation.id)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-red-700 bg-white border border-[#E5E7EB] rounded-md hover:border-red-400 hover:bg-red-50 cursor-pointer"
+              title="Delete simulation"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
           )}
         </div>
       </div>

@@ -8,7 +8,6 @@ import {
   Layers,
   MessageSquare,
   Plus,
-  RotateCcw,
   Send,
   Trash2,
   Users,
@@ -26,9 +25,9 @@ import {
   createEmptyContextBox,
   serializeAdditionalContexts,
 } from './AdditionalContextManager.tsx';
+import { cleanAiResponseText } from '../utils/cleanAiText.ts';
 import { supabase } from '../supabaseClient.js';
 import {
-  deleteConversationInSupabase,
   saveConversationToSupabase,
   savePersonaToSupabase,
 } from '../services/supabaseService.js';
@@ -43,6 +42,9 @@ interface AIAgentWorkspaceProps {
   initialPersonaId?: string | null;
   authToken: string;
   onConversationsChanged: () => void;
+  onConversationUpserted?: (conv: AgentConversation) => void;
+  onConversationDeleted?: (conversationId: string) => void;
+  onClearAllConversations?: () => void;
   onPersonasChanged?: () => void;
   onOpenSimulation: (simulationId: string) => void;
 }
@@ -81,21 +83,6 @@ const FOLLOW_UP_CHIPS = [
   'Give me a concrete example of how to apply this',
 ];
 
-function formatDisplayMessage(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/^\[Custom Audience & Context Note:[^\]]*\]\s*/i, '')
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/\[Simulated Persona Statement\]\s*/gi, '')
-    .replace(/\[Simulated [^\]]*Perspective\]:?\s*/gi, '')
-    .replace(/^\s*#{1,6}\s+/gm, '')
-    .replace(/^(\s*)\*\s+/gm, '$1- ')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*\n]+)\*/g, '$1')
-    .replace(/\*\*/g, '')
-    .trim();
-}
-
 export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   conversations,
   simulations,
@@ -106,12 +93,17 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   initialPersonaId = null,
   authToken,
   onConversationsChanged,
+  onConversationUpserted,
+  onConversationDeleted,
+  onClearAllConversations,
   onPersonasChanged,
   onOpenSimulation,
 }) => {
   const [activeConvId, setActiveConvId] = useState<string | null>(
     conversations[0]?.id || null
   );
+  const [isNewChatDraft, setIsNewChatDraft] = useState(false);
+  const [confirmClearAllHistory, setConfirmClearAllHistory] = useState(false);
   const [selectedSimId, setSelectedSimId] = useState<string>(
     initialSimulationId || ''
   );
@@ -149,12 +141,14 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   }, [initialSimulationId, initialPersonaId]);
 
   useEffect(() => {
-    if (!activeConvId && conversations.length > 0) {
+    if (!isNewChatDraft && !activeConvId && conversations.length > 0) {
       setActiveConvId(conversations[0].id);
     }
-  }, [conversations, activeConvId]);
+  }, [conversations, activeConvId, isNewChatDraft]);
 
-  const activeConv = conversations.find((c) => c.id === activeConvId) || null;
+  const activeConv = isNewChatDraft
+    ? null
+    : conversations.find((c) => c.id === activeConvId) || null;
   const activeSimulation = simulations.find((s) => s.id === selectedSimId) || null;
   const activePersona = personas.find((p) => p.id === selectedPersonaId) || null;
   const displayedMessages = optimisticMessages ?? activeConv?.messages ?? [];
@@ -230,89 +224,41 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
   const handleStartNewConversation = async () => {
     setErrorMsg(null);
-    setOptimisticMessages(null);
-    try {
-      const { session, token } = await getFreshToken();
-      const res = await fetch('/api/agent/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: activePersona
-            ? `Audience Session: ${activePersona.name}`
-            : activeSimulation
-            ? `Study Discussion: ${activeSimulation.name.slice(0, 34)}`
-            : 'Personal Assistant Session',
-          simulationId: selectedSimId || null,
-          personaId: selectedPersonaId || null,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (session?.user && data.conversation) {
-          await saveConversationToSupabase(
-            session.user.id,
-            data.conversation.workspaceId,
-            data.conversation
-          ).catch(() => null);
-        }
-        onConversationsChanged();
-        setActiveConvId(data.conversation.id);
-      } else {
-        setActiveConvId(null);
-      }
-    } catch {
-      setActiveConvId(null);
-    }
-  };
-
-  const handleResetConversation = async () => {
-    if (!activeConv) return;
-    setErrorMsg(null);
-    try {
-      const { session, token } = await getFreshToken();
-      const res = await fetch(`/api/agent/conversations/${activeConv.id}/reset`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (session?.user && data.conversation) {
-          await saveConversationToSupabase(
-            session.user.id,
-            data.conversation.workspaceId,
-            data.conversation
-          ).catch(() => null);
-        }
-        setOptimisticMessages([]);
-        onConversationsChanged();
-      }
-    } catch {
-      setErrorMsg('Unable to reset conversation right now.');
-    }
+    setOptimisticMessages([]);
+    setIsNewChatDraft(true);
+    setActiveConvId(null);
   };
 
   const handleDeleteConversation = async (id: string) => {
-    try {
-      const { session, token } = await getFreshToken();
-      if (session?.user) {
-        await deleteConversationInSupabase(session.user.id, id).catch(() => false);
-      }
-      const res = await fetch(`/api/agent/conversations/${id}`, {
+    if (onConversationDeleted) {
+      await onConversationDeleted(id);
+    } else {
+      const { token } = await getFreshToken();
+      await fetch(`/api/agent/conversations/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        if (activeConvId === id) {
-          const remaining = conversations.filter((c) => c.id !== id);
-          setActiveConvId(remaining[0]?.id || null);
-        }
-        onConversationsChanged();
+      }).catch(() => null);
+      onConversationsChanged();
+    }
+    if (activeConvId === id) {
+      const remaining = conversations.filter((c) => c.id !== id);
+      if (remaining[0]) {
+        setIsNewChatDraft(false);
+        setActiveConvId(remaining[0].id);
+      } else {
+        setIsNewChatDraft(true);
+        setActiveConvId(null);
       }
-    } catch {
-      // Ignore delete error
+    }
+  };
+
+  const handleClearAllHistory = async () => {
+    setConfirmClearAllHistory(false);
+    setOptimisticMessages([]);
+    setIsNewChatDraft(true);
+    setActiveConvId(null);
+    if (onClearAllConversations) {
+      await onClearAllConversations();
     }
   };
 
@@ -322,6 +268,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
     if (!promptText) setInputMessage('');
     setErrorMsg(null);
     setSending(true);
+    setIsNewChatDraft(false);
 
     const priorHistory = activeConv?.messages || [];
     const tempUserMsg: AgentMessage = {
@@ -363,20 +310,30 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
 
       if (res.ok) {
         const data = await res.json();
-        if (session?.user && data.conversation) {
-          await saveConversationToSupabase(
-            session.user.id,
-            data.conversation.workspaceId,
-            data.conversation
-          ).catch(() => null);
+        if (data.conversation) {
+          const sanitizedConv: AgentConversation = {
+            ...data.conversation,
+            messages: Array.isArray(data.conversation.messages)
+              ? data.conversation.messages.map((m: AgentMessage) =>
+                  m.role === 'assistant' ? { ...m, content: cleanAiResponseText(m.content) } : m
+                )
+              : [],
+          };
+          setOptimisticMessages(sanitizedConv.messages);
+          setActiveConvId(sanitizedConv.id);
+          if (onConversationUpserted) {
+            await onConversationUpserted(sanitizedConv);
+          } else if (session?.user) {
+            await saveConversationToSupabase(
+              session.user.id,
+              sanitizedConv.workspaceId,
+              sanitizedConv
+            ).catch(() => null);
+            onConversationsChanged();
+          } else {
+            onConversationsChanged();
+          }
         }
-        if (Array.isArray(data.conversation?.messages)) {
-          setOptimisticMessages(data.conversation.messages);
-        }
-        if (data.conversation?.id) {
-          setActiveConvId(data.conversation.id);
-        }
-        onConversationsChanged();
         return;
       }
 
@@ -428,12 +385,27 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
         const fallbackAssistantMsg: AgentMessage = {
           id: `msg-a-local-${Date.now()}`,
           role: 'assistant',
-          content: aiJson.content || aiJson.result || 'Response generated.',
+          content: cleanAiResponseText(aiJson.content || aiJson.result || 'Response generated.'),
           timestamp: new Date().toISOString(),
           webSearchUsed: webSearchEnabled,
           sources: fallbackSources,
         };
-        setOptimisticMessages([...priorHistory, tempUserMsg, fallbackAssistantMsg]);
+        const updatedMessages = [...priorHistory, tempUserMsg, fallbackAssistantMsg];
+        const savedConv: AgentConversation = {
+          id: activeConv?.id || crypto.randomUUID(),
+          workspaceId: activeConv?.workspaceId || 'ws-default',
+          title: activeConv?.title || rawText.slice(0, 48),
+          simulationId: selectedSimId || activeConv?.simulationId || null,
+          personaId: selectedPersonaId || activeConv?.personaId || null,
+          createdAt: activeConv?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: updatedMessages,
+        };
+        setOptimisticMessages(updatedMessages);
+        setActiveConvId(savedConv.id);
+        if (onConversationUpserted) {
+          await onConversationUpserted(savedConv);
+        }
       } else {
         setErrorMsg('Unable to get a response from Clemir AI right now. Please try again.');
       }
@@ -445,7 +417,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   };
 
   const handleCopy = (id: string, content: string) => {
-    navigator.clipboard.writeText(formatDisplayMessage(content));
+    navigator.clipboard.writeText(cleanAiResponseText(content));
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -582,29 +554,52 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             />
           </div>
 
-          {/* Conversation History List */}
+          {/* Conversation History List (Persists until manually deleted) */}
           <div className="pt-3 border-t border-[#E5E7EB]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-mono font-semibold text-[#6B7280] tracking-wider">
-                CONVERSATIONS ({conversations.length})
+                CHAT HISTORY ({conversations.length})
               </span>
-              {activeConv && activeConv.messages.length > 0 && (
+              {conversations.length > 0 && !confirmClearAllHistory && (
                 <button
                   type="button"
-                  onClick={handleResetConversation}
-                  className="inline-flex items-center gap-1 text-[10px] text-[#6B7280] hover:text-[#111827] cursor-pointer"
-                  title="Clear messages in current conversation"
+                  onClick={() => setConfirmClearAllHistory(true)}
+                  className="text-[10px] text-[#6B7280] hover:text-red-600 cursor-pointer"
+                  title="Delete all saved chat history"
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset</span>
+                  Clear History
                 </button>
               )}
             </div>
 
-            <div className="space-y-1 max-h-48 overflow-y-auto">
+            {confirmClearAllHistory && (
+              <div className="mb-2 p-2 bg-white border border-red-200 rounded-md space-y-1.5 text-[11px]">
+                <p className="text-[#111827] font-medium">
+                  Delete all saved conversations?
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleClearAllHistory}
+                    className="px-2 py-1 bg-red-600 text-white rounded text-[10px] font-semibold cursor-pointer"
+                  >
+                    Delete All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearAllHistory(false)}
+                    className="px-2 py-1 bg-white border border-[#E5E7EB] text-[#111827] rounded text-[10px] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1.5 max-h-56 overflow-y-auto">
               {conversations.length === 0 ? (
                 <p className="text-[11px] text-[#6B7280] py-1">
-                  Send any message to start your first conversation.
+                  Your saved conversations appear here and remain until deleted.
                 </p>
               ) : (
                 conversations.map((conv) => {
@@ -612,7 +607,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                   return (
                     <div
                       key={conv.id}
-                      className={`group flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-md text-xs transition-colors ${
+                      className={`flex items-center justify-between gap-1.5 px-2.5 py-2 rounded-md text-xs transition-colors ${
                         isSelected
                           ? 'bg-[#000000] text-white font-semibold'
                           : 'bg-white border border-[#E5E7EB] text-[#111827] hover:border-[#000000]'
@@ -620,19 +615,34 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                     >
                       <button
                         type="button"
-                        onClick={() => setActiveConvId(conv.id)}
-                        className="flex items-center gap-2 truncate text-left flex-1 cursor-pointer"
+                        onClick={() => {
+                          setIsNewChatDraft(false);
+                          setActiveConvId(conv.id);
+                        }}
+                        className="flex items-center gap-2 min-w-0 text-left flex-1 cursor-pointer"
                       >
                         <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{conv.title || 'Conversation'}</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate">{conv.title || 'Conversation'}</span>
+                          <span
+                            className={`block text-[10px] font-mono ${
+                              isSelected ? 'text-gray-300' : 'text-[#6B7280]'
+                            }`}
+                          >
+                            {conv.messages.length} msgs
+                          </span>
+                        </div>
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteConversation(conv.id)}
-                        className={`opacity-0 group-hover:opacity-100 cursor-pointer shrink-0 ${
-                          isSelected ? 'text-gray-300 hover:text-white' : 'text-[#6B7280] hover:text-red-600'
+                        className={`p-1 rounded cursor-pointer shrink-0 transition-colors ${
+                          isSelected
+                            ? 'text-gray-300 hover:text-white'
+                            : 'text-[#6B7280] hover:text-red-600'
                         }`}
                         title="Delete conversation"
+                        aria-label={`Delete ${conv.title || 'conversation'}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -726,7 +736,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           ) : (
             <>
               {displayedMessages.map((msg) => {
-                const cleanContent = formatDisplayMessage(msg.content);
+                const cleanContent =
+                  msg.role === 'assistant' ? cleanAiResponseText(msg.content) : msg.content;
                 return (
                   <div
                     key={msg.id}

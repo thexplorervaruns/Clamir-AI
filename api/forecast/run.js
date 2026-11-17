@@ -859,6 +859,37 @@ export function runTimesFMInspiredForecast({
   };
 }
 
+function buildQuantitativeForecastSummary({
+  seriesName,
+  unitLabel,
+  frequency,
+  quantResult,
+  webSources,
+}) {
+  const endStep = quantResult.forecast[quantResult.forecast.length - 1];
+  const unitSuffix = unitLabel ? ` ${unitLabel}` : "";
+  const pct = quantResult.summaryStats.projectedChangePct;
+  const dirWord = pct >= 0 ? "increase" : "decline";
+  const topPatch = quantResult.patches[quantResult.patches.length - 1];
+  const sourceNames = (webSources || [])
+    .slice(0, 3)
+    .map((s) => s.title)
+    .filter(Boolean);
+
+  return {
+    available: true,
+    modelUsed: "TimesFM Quantitative Analytical Engine",
+    executiveSummary: `${seriesName} is projected to reach ${endStep.p50}${unitSuffix} (median P50) over the next ${quantResult.horizon} ${frequency} steps from the latest observation of ${quantResult.summaryStats.lastValue}${unitSuffix}, representing a ${Math.abs(pct)}% ${dirWord}. The conformal P10 to P90 range at the horizon end spans ${endStep.p10}${unitSuffix} to ${endStep.p90}${unitSuffix}.`,
+    trendAndPatchAnalysis: `Input patching tokenized ${quantResult.observationCount} historical observations into windows of ${quantResult.patchLength} steps${quantResult.seasonalPeriod > 1 ? ` with a detected seasonal cycle of ${quantResult.seasonalPeriod} periods` : ""}. The latest patch (${topPatch?.startLabel || "recent"} to ${topPatch?.endLabel || "latest"}) recorded a mean of ${topPatch?.mean}${unitSuffix} and local slope of ${topPatch?.slope}.`,
+    webDriverSynthesis:
+      sourceNames.length > 0
+        ? `Retrieved market context (${sourceNames.join(", ")}) provides external baseline drivers that could shift realized performance toward the upper P90 or lower P10 quantile band depending on adoption and cost conditions.`
+        : "No external web drivers were attached for qualitative adjustment; trajectory projections rely strictly on observed historical dynamics and holdout backtest weights.",
+    upsideAndDownsideScenarios: `Under favorable execution, the P90 upper boundary reaches ${endStep.p90}${unitSuffix} at ${endStep.label}. Conversely, conservative downside sensitivity aligns with the P10 floor of ${endStep.p10}${unitSuffix}.`,
+    confidenceAndCaveats: `Out-of-sample holdout validation across ${quantResult.backtest.holdoutSize} steps achieved MAPE of ${quantResult.backtest.mape}% and MAE of ${quantResult.backtest.mae} using ${quantResult.backtest.selectedModel}. Realized variance widens over longer horizons as structural market shifts accumulate.`,
+  };
+}
+
 /**
  * Generates LLM reasoning & web-grounded interpretation via OpenRouter API.
  */
@@ -870,6 +901,7 @@ export async function generateForecastReasoning({
   additionalContexts,
   quantResult,
   webSources,
+  maxTotalMs,
 }) {
   const ctxNotes = (Array.isArray(additionalContexts) ? additionalContexts : [])
     .filter((c) => c && String(c.content || "").trim())
@@ -879,12 +911,12 @@ export async function generateForecastReasoning({
   const sourcesText =
     webSources.length > 0
       ? webSources
-          .slice(0, 6)
+          .slice(0, 5)
           .map(
             (s, i) =>
               `${i + 1}. ${s.title} (${s.url})${s.publishedDate ? ` [${s.publishedDate}]` : ""}: ${String(
                 s.excerpt || ""
-              ).slice(0, 320)}`
+              ).slice(0, 260)}`
           )
           .join("\n")
       : "No live web search results were returned for this query.";
@@ -936,6 +968,8 @@ Return ONLY a valid JSON object with these exact 5 plain-text keys (no markdown 
       model: "google/gemini-2.5-flash",
       temperature: 0.25,
       responseFormatJson: true,
+      maxTokens: 900,
+      maxTotalMs: maxTotalMs || 5200,
       systemInstruction:
         "You are a quantitative forecasting analyst for Clemir AI. Write crisp, direct, plain-text reasoning strictly grounded in the computed metrics and retrieved web sources.",
       prompt,
@@ -958,19 +992,14 @@ Return ONLY a valid JSON object with these exact 5 plain-text keys (no markdown 
       ),
       confidenceAndCaveats: cleanNaturalAssistantText(parsed.confidenceAndCaveats || ""),
     };
-  } catch (err) {
-    return {
-      available: false,
-      error:
-        err instanceof Error
-          ? err.message
-          : "OpenRouter LLM reasoning could not be completed.",
-      executiveSummary: "",
-      trendAndPatchAnalysis: "",
-      webDriverSynthesis: "",
-      upsideAndDownsideScenarios: "",
-      confidenceAndCaveats: "",
-    };
+  } catch {
+    return buildQuantitativeForecastSummary({
+      seriesName,
+      unitLabel,
+      frequency,
+      quantResult,
+      webSources,
+    });
   }
 }
 
@@ -992,7 +1021,15 @@ export async function executeEmbeddedTimesFMForecast({
   allowNegative = undefined,
   enableWebSearch = true,
   existingWebResearch = null,
-}) {
+  skipReasoningLlm = false,
+  maxTotalMs = undefined,
+} = {}) {
+  const isServerlessEnv = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION
+  );
+  const totalBudget = Number(maxTotalMs) || (isServerlessEnv ? 6200 : 18000);
+  const deadline = Date.now() + totalBudget;
+
   const parsedPoints = parseTimeSeriesInput(rawData, points);
   if (parsedPoints.length < 6) {
     return { ok: false, detectedCount: parsedPoints.length, result: null };
@@ -1023,7 +1060,7 @@ export async function executeEmbeddedTimesFMForecast({
     sources: [],
   };
 
-  if (existingWebResearch && Array.isArray(existingWebResearch.sources) && existingWebResearch.sources.length > 0) {
+  if (existingWebResearch && Array.isArray(existingWebResearch.sources)) {
     webResearch = {
       executed: true,
       queriesExecuted: existingWebResearch.queriesExecuted || [],
@@ -1048,9 +1085,11 @@ export async function executeEmbeddedTimesFMForecast({
       searchQueries.push(`${domainContext} ${normalizedFrequency} outlook benchmarks`.slice(0, 140));
     }
 
+    const searchBudget = Math.max(1500, Math.min(2600, Math.floor((deadline - Date.now()) * 0.45)));
     const researchRes = await performRealTimeWebResearch({
       queries: searchQueries,
       maxResultsPerQuery: 4,
+      timeBudgetMs: searchBudget,
     }).catch(() => null);
 
     if (researchRes) {
@@ -1070,15 +1109,26 @@ export async function executeEmbeddedTimesFMForecast({
     }
   }
 
-  const reasoning = await generateForecastReasoning({
-    seriesName,
-    unitLabel,
-    frequency: normalizedFrequency,
-    domainContext,
-    additionalContexts,
-    quantResult,
-    webSources: webResearch.sources,
-  });
+  const remainingMs = deadline - Date.now() - 250;
+  const reasoning =
+    skipReasoningLlm || remainingMs < 2000
+      ? buildQuantitativeForecastSummary({
+          seriesName,
+          unitLabel,
+          frequency: normalizedFrequency,
+          quantResult,
+          webSources: webResearch.sources,
+        })
+      : await generateForecastReasoning({
+          seriesName,
+          unitLabel,
+          frequency: normalizedFrequency,
+          domainContext,
+          additionalContexts,
+          quantResult,
+          webSources: webResearch.sources,
+          maxTotalMs: remainingMs,
+        });
 
   return {
     ok: true,
@@ -1131,6 +1181,8 @@ export async function handleForecastRunRequest(req, res) {
       points: body.points,
       allowNegative: body.allowNegative,
       enableWebSearch: body.enableWebSearch !== false,
+      existingWebResearch: body.existingWebResearch || null,
+      skipReasoningLlm: Boolean(body.skipReasoningLlm),
     });
 
     if (!execRes.ok) {

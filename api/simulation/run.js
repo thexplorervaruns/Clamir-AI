@@ -365,6 +365,17 @@ export async function executeEvidenceBasedSimulation(params = {}) {
   const allPersonas = params.allPersonas || params.personas || [];
   const onStageChange = params.onStageChange;
 
+  const isServerlessEnv = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION
+  );
+  const budgetMs =
+    Number(params.maxExecutionMs) > 0
+      ? Number(params.maxExecutionMs)
+      : isServerlessEnv
+      ? 5800
+      : 24000;
+  const hardDeadline = Date.now() + budgetMs;
+
   const notifyStage = async (stage, progress, estSec) => {
     if (typeof onStageChange === "function") {
       await onStageChange(stage, progress, estSec);
@@ -375,12 +386,61 @@ export async function executeEvidenceBasedSimulation(params = {}) {
   await notifyStage("Preparing simulation", 15, 12);
   const researchPlan = buildSimulationResearchPlan(sim);
 
-  // STEP 2: Searching the web with Firecrawl & Spider
+  // STEP 2: Reuse pre-fetched web research when provided, otherwise execute within time budget
   await notifyStage("Searching the web", 35, 9);
-  const webResearch = await performRealTimeWebResearch({
-    queries: researchPlan.extractedQueries,
-    urlsToScrape: researchPlan.urlsToScrape,
-  });
+  let webResearch;
+  if (
+    params.existingWebResearch &&
+    Array.isArray(params.existingWebResearch.sources)
+  ) {
+    const preSources = params.existingWebResearch.sources;
+    webResearch = {
+      executedAt: params.existingWebResearch.executedAt || new Date().toISOString(),
+      queriesExecuted:
+        Array.isArray(params.existingWebResearch.queriesExecuted) &&
+        params.existingWebResearch.queriesExecuted.length > 0
+          ? params.existingWebResearch.queriesExecuted
+          : researchPlan.extractedQueries,
+      anyServiceSucceeded:
+        typeof params.existingWebResearch.anyServiceSucceeded === "boolean"
+          ? params.existingWebResearch.anyServiceSucceeded
+          : preSources.length > 0,
+      totalSourcesRetrieved: preSources.length,
+      highAuthorityCount: preSources.filter((s) =>
+        String(s?.authorityTier || "").startsWith("High")
+      ).length,
+      sources: preSources.slice(0, 8),
+      diagnostics: params.existingWebResearch.diagnostics || [],
+    };
+  } else if (params.fastDeterministic) {
+    webResearch = {
+      executedAt: new Date().toISOString(),
+      queriesExecuted: researchPlan.extractedQueries,
+      anyServiceSucceeded: false,
+      totalSourcesRetrieved: 0,
+      highAuthorityCount: 0,
+      sources: [],
+      diagnostics: [],
+    };
+  } else {
+    const searchBudgetMs = Math.max(
+      1200,
+      Math.min(isServerlessEnv ? 2200 : 5000, Math.floor((hardDeadline - Date.now()) * 0.4))
+    );
+    webResearch = await performRealTimeWebResearch({
+      queries: researchPlan.extractedQueries,
+      urlsToScrape: researchPlan.urlsToScrape,
+      timeBudgetMs: searchBudgetMs,
+    }).catch(() => ({
+      executedAt: new Date().toISOString(),
+      queriesExecuted: researchPlan.extractedQueries,
+      anyServiceSucceeded: false,
+      totalSourcesRetrieved: 0,
+      highAuthorityCount: 0,
+      sources: [],
+      diagnostics: [],
+    }));
+  }
 
   // STEP 3: Analyzing sources & Verifying information
   await notifyStage("Analyzing sources", 58, 6);
@@ -391,11 +451,12 @@ export async function executeEvidenceBasedSimulation(params = {}) {
 
   const formattedSourcesForPrompt = hasVerifiedWebSources
     ? webResearch.sources
+        .slice(0, 5)
         .map(
           (s, idx) =>
             `[Source ${idx + 1}] Title: ${s.title}\nURL: ${s.url}\nPublished: ${
               s.publishedDate || "Date not listed"
-            }\nAuthority: ${s.authorityTier}\nRetrieved Excerpt: ${s.excerpt}`
+            }\nAuthority: ${s.authorityTier}\nRetrieved Excerpt: ${String(s.excerpt || "").slice(0, 420)}`
         )
         .join("\n\n")
     : "NO EXTERNAL WEB SOURCES RETRIEVED: Research APIs returned 0 matching documents or were unreachable. Explicitly state this limitation and rely strictly on user-supplied materials and transparent analytical equations without inventing external statistics.";
@@ -404,7 +465,7 @@ export async function executeEvidenceBasedSimulation(params = {}) {
     .map((sp) => {
       const found = allPersonas.find((p) => p.id === sp.personaId);
       return found
-        ? `- ${found.name} (ID: ${found.id}, Segment: ${found.segment}, Agents: ${sp.agentCount}): ${found.tagline}. Price Sensitivity: ${found.priceSensitivity}, Decision Speed: ${found.decisionSpeed}, Brand Loyalty: ${found.brandLoyalty}/100. Decision Factors: ${found.decisionFactors.join("; ")}. Concerns: ${found.concerns.join("; ")}`
+        ? `- ${found.name} (ID: ${found.id}, Segment: ${found.segment}, Agents: ${sp.agentCount}): ${found.tagline}. Price Sensitivity: ${found.priceSensitivity}, Decision Speed: ${found.decisionSpeed}, Brand Loyalty: ${found.brandLoyalty}/100. Decision Factors: ${(found.decisionFactors || []).join("; ")}. Concerns: ${(found.concerns || []).join("; ")}`
         : `- ${sp.personaName} (ID: ${sp.personaId}, Agents: ${sp.agentCount})`;
     })
     .join("\n");
@@ -419,58 +480,66 @@ export async function executeEvidenceBasedSimulation(params = {}) {
     .join("\n");
 
   const materialSummary = (sim.materials || [])
-    .map((m) => `${m.name} (${m.kind}): ${String(m.extractedContent || "").slice(0, 800)}`)
-    .join("\n");
+    .map((m) => `${m.name} (${m.kind}): ${String(m.extractedContent || "").slice(0, 450)}`)
+    .join("\n")
+    .slice(0, 2000);
 
-  // STEP 3B: Core TimesFM Time-Series Forecasting Architecture (from sim.forecastConfig or CSV/JSON materials)
-  let timesfmForecast = null;
-  const fcCfg = sim.forecastConfig || {};
-  let rawForecastData = fcCfg.rawData || "";
-  const explicitPoints = Array.isArray(fcCfg.points) ? fcCfg.points : [];
+  // STEP 3B: Core TimesFM Time-Series Forecasting Architecture (reuse pre-computed or run instant quantitative math)
+  let timesfmForecast =
+    params.existingTimesfmForecast && typeof params.existingTimesfmForecast === "object"
+      ? params.existingTimesfmForecast
+      : null;
 
-  if (
-    (!rawForecastData || !String(rawForecastData).trim()) &&
-    explicitPoints.length < 6 &&
-    Array.isArray(sim.materials)
-  ) {
-    for (const mat of sim.materials) {
-      if (mat?.extractedContent) {
-        const candidatePts = parseTimeSeriesInput(mat.extractedContent, []);
-        if (candidatePts.length >= 6) {
-          rawForecastData = mat.extractedContent;
-          break;
+  if (!timesfmForecast) {
+    const fcCfg = sim.forecastConfig || {};
+    let rawForecastData = fcCfg.rawData || "";
+    const explicitPoints = Array.isArray(fcCfg.points) ? fcCfg.points : [];
+
+    if (
+      (!rawForecastData || !String(rawForecastData).trim()) &&
+      explicitPoints.length < 6 &&
+      Array.isArray(sim.materials)
+    ) {
+      for (const mat of sim.materials) {
+        if (mat?.extractedContent) {
+          const candidatePts = parseTimeSeriesInput(mat.extractedContent, []);
+          if (candidatePts.length >= 6) {
+            rawForecastData = mat.extractedContent;
+            break;
+          }
         }
+      }
+    }
+
+    if (
+      (rawForecastData && String(rawForecastData).trim()) ||
+      explicitPoints.length >= 6
+    ) {
+      const fcRes = await executeEmbeddedTimesFMForecast({
+        seriesName:
+          (fcCfg.seriesName && String(fcCfg.seriesName).trim()) ||
+          `${sim.name || "Simulation"} Core Metric`,
+        unitLabel: fcCfg.unitLabel || "",
+        frequency: fcCfg.frequency || "monthly",
+        horizon: fcCfg.horizon || 12,
+        patchLength: fcCfg.patchLength || "auto",
+        seasonalPeriod: fcCfg.seasonalPeriod || "auto",
+        domainContext: [sim.researchContext, sim.hypothesis, sim.targetAudience]
+          .filter(Boolean)
+          .join(" | "),
+        rawData: rawForecastData,
+        points: explicitPoints,
+        existingWebResearch: webResearch,
+        skipReasoningLlm: true,
+      }).catch(() => null);
+
+      if (fcRes?.ok && fcRes.result) {
+        timesfmForecast = fcRes.result;
       }
     }
   }
 
-  if (
-    (rawForecastData && String(rawForecastData).trim()) ||
-    explicitPoints.length >= 6
-  ) {
-    const fcRes = await executeEmbeddedTimesFMForecast({
-      seriesName:
-        (fcCfg.seriesName && String(fcCfg.seriesName).trim()) ||
-        `${sim.name || "Simulation"} Core Metric`,
-      unitLabel: fcCfg.unitLabel || "",
-      frequency: fcCfg.frequency || "monthly",
-      horizon: fcCfg.horizon || 12,
-      patchLength: fcCfg.patchLength || "auto",
-      seasonalPeriod: fcCfg.seasonalPeriod || "auto",
-      domainContext: [sim.researchContext, sim.hypothesis, sim.targetAudience]
-        .filter(Boolean)
-        .join(" | "),
-      rawData: rawForecastData,
-      points: explicitPoints,
-      existingWebResearch: webResearch,
-    }).catch(() => null);
-
-    if (fcRes?.ok && fcRes.result) {
-      timesfmForecast = fcRes.result;
-    }
-  }
-
-  // STEP 4: Generating results via OpenRouter (google/gemini-2.5-flash)
+  // STEP 4: Generating results via OpenRouter (google/gemini-2.5-flash) strictly within deadline
   await notifyStage("Generating results", 88, 2);
 
   const systemInstruction = `You are the Clemir AI Evidence-Based Simulation & Research Engine powered by OpenRouter (google/gemini-2.5-flash).
@@ -494,7 +563,7 @@ Hypothesis: ${sim.hypothesis || "Not specified"}
 Target Audience: ${sim.targetAudience || "Selected Personas"}
 Objectives: ${sim.researchObjectives || "Not specified"}
 Evaluation Context: ${sim.researchContext || "Standard evaluation context"}
-Type-Specific Parameters: ${JSON.stringify(sim.typeSpecificData || {})}
+Type-Specific Parameters: ${JSON.stringify(sim.typeSpecificData || {}).slice(0, 1200)}
 User-Attached Materials:
 ${materialSummary || "None attached"}
 
@@ -529,22 +598,50 @@ Return a JSON object with these exact top-level keys:
   let modelUsed = "google/gemini-2.5-flash";
   let openRouterErrorNote = "";
 
-  try {
-    const completion = await callOpenRouterChat({
-      prompt,
-      systemInstruction,
-      temperature: 0.15,
-      jsonMode: true,
-    });
-    modelUsed = completion.model || "google/gemini-2.5-flash";
-    const cleaned = completion.content
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```$/i, "")
-      .trim();
-    parsed = JSON.parse(cleaned);
-  } catch (err) {
-    openRouterErrorNote = err instanceof Error ? err.message : String(err);
-    console.warn("OpenRouter synthesis fallback to deterministic evidence engine:", openRouterErrorNote);
+  const remainingForLlm = hardDeadline - Date.now() - 250;
+  if (!params.fastDeterministic && remainingForLlm >= 1800) {
+    try {
+      const completion = await Promise.race([
+        callOpenRouterChat({
+          prompt,
+          systemInstruction,
+          temperature: 0.15,
+          jsonMode: true,
+          maxTokens: 2100,
+          maxTotalMs: remainingForLlm,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Simulation LLM timed out within serverless budget.")),
+            remainingForLlm + 100
+          )
+        ),
+      ]);
+      modelUsed = completion.model || "google/gemini-2.5-flash";
+      const cleaned = completion.content
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```$/i, "")
+        .trim();
+      parsed = JSON.parse(cleaned);
+    } catch (err) {
+      openRouterErrorNote = err instanceof Error ? err.message : String(err);
+      console.warn(
+        "OpenRouter synthesis fallback to deterministic evidence engine:",
+        openRouterErrorNote
+      );
+      parsed = buildDeterministicEvidenceSynthesis(
+        sim,
+        allPersonas,
+        webResearch,
+        openRouterErrorNote,
+        timesfmForecast
+      );
+      modelUsed = "Clemir Multi-Attribute Utility Engine";
+    }
+  } else {
+    openRouterErrorNote = params.fastDeterministic
+      ? "Fast deterministic execution mode selected."
+      : "Completed via deterministic utility engine to guarantee fast response.";
     parsed = buildDeterministicEvidenceSynthesis(
       sim,
       allPersonas,
@@ -552,6 +649,7 @@ Return a JSON object with these exact top-level keys:
       openRouterErrorNote,
       timesfmForecast
     );
+    modelUsed = "Clemir Multi-Attribute Utility Engine";
   }
 
   const sourcesAndReferences = webResearch.sources.map((s) => ({
@@ -644,7 +742,14 @@ export async function handleSimulationRunRequest(req, res) {
         body = {};
       }
     }
-    const { simulation, personas } = body || {};
+    const {
+      simulation,
+      personas,
+      existingWebResearch,
+      existingTimesfmForecast,
+      fastDeterministic,
+      maxExecutionMs,
+    } = body || {};
     if (!simulation || !simulation.name) {
       res.status(400).json({
         ok: false,
@@ -656,6 +761,13 @@ export async function handleSimulationRunRequest(req, res) {
     const { results, researchBundle } = await executeEvidenceBasedSimulation({
       sim: simulation,
       allPersonas: Array.isArray(personas) ? personas : [],
+      existingWebResearch: existingWebResearch || null,
+      existingTimesfmForecast: existingTimesfmForecast || null,
+      fastDeterministic: Boolean(fastDeterministic),
+      maxExecutionMs:
+        typeof maxExecutionMs === "number" && maxExecutionMs > 0
+          ? Math.min(8000, maxExecutionMs)
+          : undefined,
     });
 
     res.status(200).json({

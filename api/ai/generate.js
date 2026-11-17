@@ -106,6 +106,9 @@ export async function callOpenRouterChat({
   jsonMode = false,
   responseFormatJson = false,
   cleanText = false,
+  maxTokens,
+  timeoutMs,
+  maxTotalMs,
 }) {
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
   if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY.startsWith("{{")) {
@@ -143,20 +146,35 @@ export async function callOpenRouterChat({
   }
 
   const wantJson = Boolean(jsonMode || responseFormatJson);
+  const isServerlessEnv = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION
+  );
+  const totalBudgetMs =
+    typeof maxTotalMs === "number" && maxTotalMs > 0
+      ? maxTotalMs
+      : isServerlessEnv
+      ? 6800
+      : 22000;
+  const deadline = Date.now() + totalBudgetMs;
 
-  const attemptModelCall = async (targetModel, includeResponseFormat, timeoutMs = 15000) => {
+  const attemptModelCall = async (targetModel, includeResponseFormat, callTimeoutMs) => {
     const requestBody = {
       model: targetModel,
       messages: finalMessages,
       temperature,
     };
 
+    if (typeof maxTokens === "number" && maxTokens > 0) {
+      requestBody.max_tokens = Math.round(maxTokens);
+    }
+
     if (includeResponseFormat) {
       requestBody.response_format = { type: "json_object" };
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const effectiveTimeout = Math.max(800, callTimeoutMs);
+    const timeout = setTimeout(() => controller.abort(), effectiveTimeout);
 
     try {
       const response = await fetch(OPENROUTER_ENDPOINT, {
@@ -180,11 +198,17 @@ export async function callOpenRouterChat({
     }
   };
 
-  // 1. Primary attempt with google/gemini-2.5-flash (catch network/timeout so free fallback can still try)
+  // 1. Primary attempt with google/gemini-2.5-flash bounded by remaining budget
+  const remainingPrimary = Math.max(1000, deadline - Date.now() - 100);
+  const primaryTimeout =
+    typeof timeoutMs === "number" && timeoutMs > 0
+      ? Math.min(timeoutMs, remainingPrimary)
+      : Math.min(isServerlessEnv ? 5800 : 14000, remainingPrimary);
+
   let response = null;
   let data = {};
   try {
-    const primaryRes = await attemptModelCall(model, wantJson, 15000);
+    const primaryRes = await attemptModelCall(model, wantJson, primaryTimeout);
     response = primaryRes.response;
     data = primaryRes.data;
   } catch (primaryErr) {
@@ -193,9 +217,14 @@ export async function callOpenRouterChat({
     }
   }
 
-  // 2. If primary failed, timed out, or returned error, fall back to openrouter/free
-  if ((!response || !response.ok) && model !== FALLBACK_FREE_MODEL) {
-    const retryRes = await attemptModelCall(FALLBACK_FREE_MODEL, false, 11000).catch(() => null);
+  // 2. If primary failed or timed out, only retry openrouter/free if sufficient time budget remains
+  const remainingFallback = deadline - Date.now() - 100;
+  if ((!response || !response.ok) && model !== FALLBACK_FREE_MODEL && remainingFallback >= 2000) {
+    const retryRes = await attemptModelCall(
+      FALLBACK_FREE_MODEL,
+      false,
+      Math.min(7500, remainingFallback)
+    ).catch(() => null);
     if (retryRes && retryRes.response && retryRes.response.ok) {
       response = retryRes.response;
       data = retryRes.data;

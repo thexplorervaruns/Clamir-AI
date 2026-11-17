@@ -60,7 +60,7 @@ export async function searchWithFirecrawl(query, limit = 5) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 3800);
 
     const response = await fetch("https://api.firecrawl.dev/v1/search", {
       method: "POST",
@@ -160,7 +160,7 @@ export async function scrapeUrlWithFirecrawl(targetUrl) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7500);
+    const timeout = setTimeout(() => controller.abort(), 3500);
     const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
       signal: controller.signal,
@@ -247,7 +247,7 @@ export async function extractUrlContentSafely(targetUrl) {
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
+    const timer = setTimeout(() => controller.abort(), 3200);
     const res = await fetch(parsedUrl.toString(), {
       signal: controller.signal,
       headers: {
@@ -319,7 +319,7 @@ export async function searchWithSpider(query, limit = 4) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 7000);
+    const timeout = setTimeout(() => controller.abort(), 3500);
     const response = await fetch("https://api.spider.cloud/search", {
       method: "POST",
       signal: controller.signal,
@@ -418,7 +418,7 @@ export async function searchWithPublicWeb(query, limit = 5) {
   const ddgHtmlPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => controller.abort(), 2400);
       const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}`;
       const res = await fetch(url, {
         signal: controller.signal,
@@ -473,7 +473,7 @@ export async function searchWithPublicWeb(query, limit = 5) {
   const wikiPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4500);
+      const timeout = setTimeout(() => controller.abort(), 2200);
       const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
         cleanQuery
       )}&srlimit=3&format=json&origin=*`;
@@ -512,7 +512,7 @@ export async function searchWithPublicWeb(query, limit = 5) {
   const ddgInstantPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4500);
+      const timeout = setTimeout(() => controller.abort(), 2200);
       const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(
         cleanQuery
       )}&format=json&no_html=1&skip_disambig=1`;
@@ -565,24 +565,46 @@ export async function performRealTimeWebResearch({
   queries = [],
   urlsToScrape = [],
   maxResultsPerQuery = 4,
+  timeBudgetMs,
 } = {}) {
+  const isServerlessEnv = Boolean(
+    process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION
+  );
+  const effectiveBudgetMs =
+    typeof timeBudgetMs === "number" && timeBudgetMs > 0
+      ? timeBudgetMs
+      : isServerlessEnv
+      ? 3500
+      : 7000;
+
   const inputQueries = [
     ...(Array.isArray(queries) ? queries : queries ? [queries] : []),
     ...(query ? [query] : []),
   ];
 
+  const maxQueryCount = effectiveBudgetMs <= 4000 ? 2 : 3;
   const cleanQueries = Array.from(
     new Set(
       inputQueries
         .map((q) => String(q || "").trim())
         .filter(Boolean)
     )
-  ).slice(0, 3);
+  ).slice(0, maxQueryCount);
+
+  const validUrls = (Array.isArray(urlsToScrape) ? urlsToScrape : [])
+    .filter((u) => u && /^https?:\/\//i.test(u))
+    .slice(0, 2);
 
   const providerDiagnostics = [];
   const rawSources = [];
 
-  const queryResults = await Promise.all(
+  const withTimeout = (promise, ms) =>
+    Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+    ]);
+
+  const queryBatchPromise = Promise.all(
     cleanQueries.map(async (q) => {
       const [fcRes, spRes] = await Promise.all([
         searchWithFirecrawl(q, maxResultsPerQuery),
@@ -596,66 +618,53 @@ export async function performRealTimeWebResearch({
         querySources.push(...publicFallback.sources);
       }
 
-      return {
-        diag: {
-          query: q,
-          firecrawl: {
-            configured: fcRes.configured,
-            ok: fcRes.ok,
-            count: fcRes.sources.length,
-            error: fcRes.error,
-          },
-          spider: {
-            configured: spRes.configured,
-            ok: spRes.ok,
-            count: spRes.sources.length,
-            error: spRes.error,
-          },
-          publicWeb: publicFallback
-            ? {
-                configured: true,
-                ok: publicFallback.ok,
-                count: publicFallback.sources.length,
-                error: publicFallback.error,
-              }
-            : undefined,
+      const diagEntry = {
+        query: q,
+        firecrawl: {
+          configured: fcRes.configured,
+          ok: fcRes.ok,
+          count: fcRes.sources.length,
+          error: fcRes.error,
         },
-        querySources,
+        spider: {
+          configured: spRes.configured,
+          ok: spRes.ok,
+          count: spRes.sources.length,
+          error: spRes.error,
+        },
+        publicWeb: publicFallback
+          ? {
+              configured: true,
+              ok: publicFallback.ok,
+              count: publicFallback.sources.length,
+              error: publicFallback.error,
+            }
+          : undefined,
       };
+      providerDiagnostics.push(diagEntry);
+      rawSources.push(...querySources);
     })
   );
 
-  for (const item of queryResults) {
-    providerDiagnostics.push(item.diag);
-    rawSources.push(...item.querySources);
-  }
+  const scrapeBatchPromise = Promise.all(
+    validUrls.map(async (targetUrl) => {
+      const scraped = await extractUrlContentSafely(targetUrl);
+      if (scraped.ok) {
+        rawSources.push({
+          provider: "URL Extract",
+          title: scraped.title,
+          url: targetUrl,
+          publishedDate: null,
+          authorityTier: scoreAuthority(targetUrl),
+          excerpt: scraped.extractedContent,
+          retrievedAt: new Date().toISOString(),
+        });
+      }
+    })
+  );
 
-  // Also scrape any explicit URLs attached by the user in parallel
-  const validUrls = (Array.isArray(urlsToScrape) ? urlsToScrape : [])
-    .filter((u) => u && /^https?:\/\//i.test(u))
-    .slice(0, 2);
-
-  if (validUrls.length > 0) {
-    const scrapedList = await Promise.all(
-      validUrls.map(async (targetUrl) => {
-        const scraped = await extractUrlContentSafely(targetUrl);
-        return scraped.ok
-          ? {
-              provider: "URL Extract",
-              title: scraped.title,
-              url: targetUrl,
-              publishedDate: null,
-              authorityTier: scoreAuthority(targetUrl),
-              excerpt: scraped.extractedContent,
-              retrievedAt: new Date().toISOString(),
-            }
-          : null;
-      })
-    );
-    for (const s of scrapedList) {
-      if (s) rawSources.push(s);
-    }
-  }
+  // Run queries and URL scrapes strictly in parallel, capped by effectiveBudgetMs
+  await withTimeout(Promise.all([queryBatchPromise, scrapeBatchPromise]), effectiveBudgetMs);
 
   // Deduplicate by normalized URL and remove empty excerpts
   const seenUrls = new Set();

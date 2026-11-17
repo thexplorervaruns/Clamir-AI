@@ -76,6 +76,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [launchStatus, setLaunchStatus] = useState('Launching Simulation...');
 
   // Step 1: Setup & Type-Specific Fields — All text fields start completely empty
   const [simType, setSimType] = useState<SimulationTypeId>(initialType);
@@ -555,9 +556,20 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
     }
   };
 
+  const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs = 12000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const handleRunSimulation = async () => {
     if (!validateStep(1) || !validateStep(3) || !validateStep(4)) return;
     setSubmitting(true);
+    setLaunchStatus('Running Simulation...');
     setError(null);
     try {
       const effectivePersonas = (
@@ -581,6 +593,10 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
           agentCount: parsed,
         };
       });
+
+      const relevantPersonas = personas.filter((p) =>
+        effectivePersonas.some((ep) => ep.personaId === p.id)
+      );
 
       const resolvedForecastConfig: SimulationForecastConfig | undefined =
         fcEnabled || fcRawData.trim()
@@ -629,78 +645,202 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         questions,
         selectedPersonas: effectivePersonas,
         forecastConfig: resolvedForecastConfig,
-        personas,
+        personas: relevantPersonas,
       };
+
+      const buildCompletedSimFromResults = (results: Simulation['results']): Simulation => ({
+        id:
+          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `sim-${Date.now()}`,
+        workspaceId: activeWorkspaceId || 'ws-default',
+        name: simulationPayload.name,
+        type: simulationPayload.type,
+        description: simulationPayload.description,
+        hypothesis: simulationPayload.hypothesis,
+        researchContext: simulationPayload.researchContext,
+        targetAudience: simulationPayload.targetAudience,
+        researchObjectives: simulationPayload.researchObjectives,
+        typeSpecificData: simulationPayload.typeSpecificData,
+        materials: simulationPayload.materials,
+        questions: simulationPayload.questions,
+        selectedPersonas: simulationPayload.selectedPersonas,
+        forecastConfig: resolvedForecastConfig,
+        status: 'Completed',
+        stage: 'Completed',
+        progress: 100,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        estimatedSecondsRemaining: 0,
+        results,
+      });
 
       let finalSim: Simulation | null = null;
       let primaryError = '';
 
-      // 1. Try /api/simulations (local Express background worker OR Vercel /api/platform.js)
-      const res = await fetch('/api/simulations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify(simulationPayload),
-      }).catch(() => null);
-
-      if (res) {
-        const parsed = await readJsonSafe(res);
-        if (res.ok && parsed.data?.simulation) {
-          finalSim = parsed.data.simulation as Simulation;
-        } else if (parsed.data?.error && res.status >= 400 && res.status < 500 && res.status !== 404 && res.status !== 405) {
-          primaryError = parsed.data.error;
-        }
-      }
-
-      // 2. Fallback to direct stateless serverless execution (/api/simulation/run)
-      if (!finalSim && !primaryError) {
-        const directRes = await fetch('/api/simulation/run', {
+      // 1. Primary execution: /api/simulations (local Express queues immediately; Vercel executes within <6s budget)
+      const res = await fetchWithTimeout(
+        '/api/simulations',
+        {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
-          body: JSON.stringify({
-            simulation: simulationPayload,
-            personas,
-          }),
-        }).catch(() => null);
+          body: JSON.stringify(simulationPayload),
+        },
+        12500
+      ).catch(() => null);
+
+      if (res) {
+        const parsed = await readJsonSafe(res);
+        if (res.ok && parsed.data?.simulation) {
+          finalSim = parsed.data.simulation as Simulation;
+        } else if (
+          parsed.data?.error &&
+          res.status >= 400 &&
+          res.status < 500 &&
+          res.status !== 404 &&
+          res.status !== 405
+        ) {
+          primaryError = parsed.data.error;
+        }
+      }
+
+      // 2. Staged serverless recovery if primary call timed out (504) or returned non-4xx error
+      if (!finalSim && !primaryError) {
+        let preResearch: any = null;
+        let preForecast: any = null;
+
+        // 2a. Pre-fetch web research in its own dedicated serverless slot
+        setLaunchStatus('Searching Market Evidence...');
+        const baseQuery = [
+          simulationPayload.name,
+          simulationPayload.targetAudience,
+          marketOrIndustry,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        const searchQueries = [
+          baseQuery ? `${baseQuery} market benchmarks research` : 'market benchmarks research',
+          simulationPayload.hypothesis
+            ? `${simulationPayload.hypothesis.slice(0, 80)} industry data`
+            : '',
+        ].filter(Boolean);
+        const searchUrls = [
+          websiteOrProductUrl,
+          ...materials.filter((m) => m.kind === 'url' && m.url).map((m) => m.url!),
+        ].filter(Boolean);
+
+        const researchRes = await fetchWithTimeout(
+          '/api/research/search',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ queries: searchQueries, urls: searchUrls }),
+          },
+          8000
+        ).catch(() => null);
+        if (researchRes && researchRes.ok) {
+          const researchJson = await readJsonSafe(researchRes);
+          if (researchJson.ok && researchJson.data) {
+            preResearch = researchJson.data;
+          }
+        }
+
+        // 2b. Pre-compute TimesFM forecast in its own serverless slot if enabled
+        if (resolvedForecastConfig && resolvedForecastConfig.rawData?.trim()) {
+          setLaunchStatus('Computing TimesFM Forecast...');
+          const fcRes = await fetchWithTimeout(
+            '/api/forecast/run',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...resolvedForecastConfig,
+                domainContext: [researchContext, hypothesis, simulationPayload.targetAudience]
+                  .filter(Boolean)
+                  .join(' | '),
+                enableWebSearch: !preResearch,
+                existingWebResearch: preResearch,
+              }),
+            },
+            9000
+          ).catch(() => null);
+          if (fcRes && fcRes.ok) {
+            const fcJson = await readJsonSafe(fcRes);
+            if (fcJson.ok && fcJson.data?.result) {
+              preForecast = fcJson.data.result;
+            }
+          }
+        }
+
+        // 2c. Execute /api/simulation/run reusing pre-fetched research & forecast (100% budget for synthesis)
+        setLaunchStatus('Synthesizing Audience Results...');
+        const directRes = await fetchWithTimeout(
+          '/api/simulation/run',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+            body: JSON.stringify({
+              simulation: simulationPayload,
+              personas: relevantPersonas,
+              existingWebResearch: preResearch,
+              existingTimesfmForecast: preForecast,
+              maxExecutionMs: 5500,
+            }),
+          },
+          11500
+        ).catch(() => null);
 
         if (directRes) {
           const directParsed = await readJsonSafe(directRes);
           if (directRes.ok && directParsed.data?.ok && directParsed.data?.results) {
-            finalSim = {
-              id:
-                typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-                  ? crypto.randomUUID()
-                  : `sim-${Date.now()}`,
-              workspaceId: activeWorkspaceId || 'ws-default',
-              name: simulationPayload.name,
-              type: simulationPayload.type,
-              description: simulationPayload.description,
-              hypothesis: simulationPayload.hypothesis,
-              researchContext: simulationPayload.researchContext,
-              targetAudience: simulationPayload.targetAudience,
-              researchObjectives: simulationPayload.researchObjectives,
-              typeSpecificData: simulationPayload.typeSpecificData,
-              materials: simulationPayload.materials,
-              questions: simulationPayload.questions,
-              selectedPersonas: simulationPayload.selectedPersonas,
-              forecastConfig: resolvedForecastConfig,
-              status: 'Completed',
-              stage: 'Completed',
-              progress: 100,
-              startedAt: new Date().toISOString(),
-              completedAt: new Date().toISOString(),
-              estimatedSecondsRemaining: 0,
-              results: directParsed.data.results,
-            };
-          } else {
-            primaryError =
-              directParsed.data?.error ||
-              `Simulation service returned HTTP ${directRes.status}.`;
+            finalSim = buildCompletedSimFromResults(directParsed.data.results);
+          } else if (
+            directParsed.data?.error &&
+            directRes.status >= 400 &&
+            directRes.status < 500
+          ) {
+            primaryError = directParsed.data.error;
+          }
+        }
+
+        // 2d. Guaranteed fast-deterministic failsafe if upstream LLM/gateway stalled (executes in <50ms)
+        if (!finalSim && !primaryError) {
+          setLaunchStatus('Finalizing Simulation...');
+          const safeRes = await fetchWithTimeout(
+            '/api/simulation/run',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+              },
+              body: JSON.stringify({
+                simulation: simulationPayload,
+                personas: relevantPersonas,
+                existingWebResearch: preResearch,
+                existingTimesfmForecast: preForecast,
+                fastDeterministic: true,
+              }),
+            },
+            8000
+          ).catch(() => null);
+
+          if (safeRes) {
+            const safeParsed = await readJsonSafe(safeRes);
+            if (safeRes.ok && safeParsed.data?.ok && safeParsed.data?.results) {
+              finalSim = buildCompletedSimFromResults(safeParsed.data.results);
+            } else {
+              primaryError =
+                safeParsed.data?.error ||
+                `Simulation service returned HTTP ${safeRes.status}.`;
+            }
           }
         }
       }
@@ -736,6 +876,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
       );
     } finally {
       setSubmitting(false);
+      setLaunchStatus('Launching Simulation...');
     }
   };
 
@@ -2057,7 +2198,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             className="inline-flex items-center gap-2 px-6 py-2.5 text-xs sm:text-sm font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 disabled:opacity-50 cursor-pointer"
           >
             <Play className="w-4 h-4" />
-            <span>{submitting ? 'Launching Simulation...' : 'Run Simulation'}</span>
+            <span>{submitting ? launchStatus : 'Run Simulation'}</span>
           </button>
         )}
       </div>

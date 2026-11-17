@@ -273,6 +273,10 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       const { results } = await executeEvidenceBasedSimulation({
         sim: newSim,
         allPersonas: personasList,
+        existingWebResearch: body.existingWebResearch || null,
+        existingTimesfmForecast: body.existingTimesfmForecast || null,
+        fastDeterministic: Boolean(body.fastDeterministic),
+        maxExecutionMs: 5800,
       });
 
       newSim.results = results;
@@ -331,6 +335,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
         const sr = await performRealTimeWebResearch({
           queries: [message],
           maxResultsPerQuery: 5,
+          timeBudgetMs: 2600,
         }).catch(() => null);
         if (sr && Array.isArray(sr.sources)) {
           rawWebSources = sr.sources;

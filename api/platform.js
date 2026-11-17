@@ -261,6 +261,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
         questions: Array.isArray(body.questions) ? body.questions : [],
         selectedPersonas,
         forecastConfig: body.forecastConfig || undefined,
+        webSearchEnabled: body.webSearchEnabled !== false,
         status: "Completed",
         stage: "Completed",
         progress: 100,
@@ -273,6 +274,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       const { results } = await executeEvidenceBasedSimulation({
         sim: newSim,
         allPersonas: personasList,
+        enableWebSearch: newSim.webSearchEnabled !== false,
         existingWebResearch: body.existingWebResearch || null,
         existingTimesfmForecast: body.existingTimesfmForecast || null,
         fastDeterministic: Boolean(body.fastDeterministic),
@@ -329,9 +331,10 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       if (!message) {
         return res.status(400).json({ error: "Message is required." });
       }
+      const shouldWebSearch = body.webSearch !== false;
       let sources = [];
       let rawWebSources = [];
-      if (body.webSearch) {
+      if (shouldWebSearch) {
         const sr = await performRealTimeWebResearch({
           queries: [message],
           maxResultsPerQuery: 5,
@@ -379,9 +382,9 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
         role: "assistant",
         content:
           replyContent ||
-          `I received your message about "${message}". Feel free to add any extra details or toggle Web Search for live web findings.`,
+          `I received your message about "${message}". Feel free to share any extra details or follow-up questions.`,
         timestamp: new Date().toISOString(),
-        webSearchUsed: Boolean(body.webSearch),
+        webSearchUsed: shouldWebSearch,
         sources,
       };
       const conv = {

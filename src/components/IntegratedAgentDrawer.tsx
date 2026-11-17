@@ -64,8 +64,8 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
   const [selectedSimId, setSelectedSimId] = useState<string>(activeSimulationId || '');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string>('');
   const [showContextPanel, setShowContextPanel] = useState<boolean>(true);
-  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(false);
   const [inputMessage, setInputMessage] = useState<string>('');
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(true);
   const [sending, setSending] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -264,7 +264,7 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
           additionalContexts: cleanedContexts,
           customNote: combinedNote,
           systemPrompt:
-            rawSources.length > 0
+            webSearchEnabled && rawSources.length > 0
               ? `Live Web Sources:\n${rawSources
                   .map(
                     (s: any, idx: number) =>
@@ -492,7 +492,7 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
                 Ask Clemir AI Anything
               </p>
               <p className="text-xs text-[#6B7280] leading-relaxed">
-                Your Additional Context boxes above are automatically read by Clemir AI. Toggle Web Search below anytime for live external sources.
+                Your Additional Context boxes and active simulation are read by Clemir AI. Toggle Web Search ON or OFF below to control live web access.
               </p>
             </div>
           ) : (
@@ -571,7 +571,9 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
           )}
           {sending && (
             <div className="p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-xs text-[#6B7280] font-mono">
-              Thinking{webSearchEnabled ? ' and searching web sources' : ''}...
+              {webSearchEnabled
+                ? 'Thinking and searching web sources...'
+                : 'Thinking without web search...'}
             </div>
           )}
           {errorMsg && (
@@ -590,7 +592,11 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask Clemir AI or search the web..."
+                placeholder={
+                  webSearchEnabled
+                    ? 'Ask Clemir AI anything (Web Search ON)...'
+                    : 'Ask Clemir AI anything (Web Search OFF)...'
+                }
                 className="flex-1 px-3 py-2 text-xs bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
               <button
@@ -605,18 +611,22 @@ export const IntegratedAgentDrawer: React.FC<IntegratedAgentDrawerProps> = ({
             <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
-                onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded border text-[11px] font-medium transition-colors cursor-pointer ${
+                role="switch"
+                aria-checked={webSearchEnabled}
+                onClick={() => setWebSearchEnabled((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-semibold transition-colors cursor-pointer ${
                   webSearchEnabled
                     ? 'bg-[#000000] text-white border-[#000000]'
-                    : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#111827]'
+                    : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-[#000000] hover:text-[#111827]'
                 }`}
               >
                 <Globe className="w-3 h-3" />
-                <span>Web Search: {webSearchEnabled ? 'On' : 'Off'}</span>
+                <span>Web Search: {webSearchEnabled ? 'ON' : 'OFF'}</span>
               </button>
               <span className="text-[10px] text-[#6B7280]">
-                Reads all Additional Context boxes
+                {webSearchEnabled
+                  ? 'Web Search ON + Additional Context'
+                  : 'Web Search OFF · Offline Context'}
               </span>
             </div>
           </form>

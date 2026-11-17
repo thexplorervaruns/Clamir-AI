@@ -40,6 +40,7 @@ interface AIAgentWorkspaceProps {
   onAdditionalContextsChange?: (next: AdditionalContextBox[]) => void;
   initialSimulationId?: string | null;
   initialPersonaId?: string | null;
+  initialConversationId?: string | null;
   authToken: string;
   activeWorkspaceId?: string;
   onConversationsChanged: () => void;
@@ -133,6 +134,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   onAdditionalContextsChange,
   initialSimulationId = null,
   initialPersonaId = null,
+  initialConversationId = null,
   authToken,
   activeWorkspaceId = 'ws-default',
   onConversationsChanged,
@@ -144,7 +146,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   onOpenSimulation,
 }) => {
   const [activeConvId, setActiveConvId] = useState<string | null>(
-    conversations[0]?.id || null
+    initialConversationId || conversations[0]?.id || null
   );
   const [isNewChatDraft, setIsNewChatDraft] = useState(false);
   const [confirmClearAllHistory, setConfirmClearAllHistory] = useState(false);
@@ -166,8 +168,8 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
   const [newAudienceSegment, setNewAudienceSegment] = useState('');
   const [newAudienceDescription, setNewAudienceDescription] = useState('');
 
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(true);
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -182,7 +184,11 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
     if (initialPersonaId) {
       setSelectedPersonaId(initialPersonaId);
     }
-  }, [initialSimulationId, initialPersonaId]);
+    if (initialConversationId) {
+      setIsNewChatDraft(false);
+      setActiveConvId(initialConversationId);
+    }
+  }, [initialSimulationId, initialPersonaId, initialConversationId]);
 
   useEffect(() => {
     if (!isNewChatDraft && !activeConvId && conversations.length > 0) {
@@ -491,7 +497,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           additionalContexts: cleanedContexts,
           customNote: combinedNote,
           systemPrompt:
-            rawSources.length > 0
+            webSearchEnabled && rawSources.length > 0
               ? `Live Web Sources:\n${rawSources
                   .map(
                     (s: any, i: number) =>
@@ -965,7 +971,9 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           )}
           {sending && (
             <div className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-xs text-[#6B7280] max-w-md font-mono">
-              Thinking{webSearchEnabled ? ' and searching live web sources' : ''}...
+              {webSearchEnabled
+                ? 'Thinking and searching live web sources...'
+                : 'Thinking with scenario and conversation context (Web Search OFF)...'}
             </div>
           )}
           {errorMsg && (
@@ -976,7 +984,7 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Message Composer with Web Search Toggle */}
+        {/* Message Composer with Manual Web Search ON/OFF Toggle */}
         <div className="p-4 border-t border-[#E5E7EB] bg-[#F9FAFB]">
           <form
             onSubmit={(e) => {
@@ -990,7 +998,11 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask Clemir AI anything, plan tasks, or research with Web Search..."
+                placeholder={
+                  webSearchEnabled
+                    ? 'Ask Clemir AI anything (Web Search ON)...'
+                    : 'Ask Clemir AI anything (Web Search OFF — offline context only)...'
+                }
                 className="flex-1 px-3.5 py-2.5 text-xs sm:text-sm bg-white border border-[#E5E7EB] rounded-md focus:outline-none focus:border-[#000000] placeholder:text-[#9CA3AF]"
               />
               <button
@@ -1006,21 +1018,23 @@ export const AIAgentWorkspace: React.FC<AIAgentWorkspaceProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded border text-xs font-medium transition-colors cursor-pointer ${
+                role="switch"
+                aria-checked={webSearchEnabled}
+                onClick={() => setWebSearchEnabled((prev) => !prev)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors cursor-pointer ${
                   webSearchEnabled
                     ? 'bg-[#000000] text-white border-[#000000]'
-                    : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#111827]'
+                    : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-[#000000] hover:text-[#111827]'
                 }`}
               >
                 <Globe className="w-3.5 h-3.5" />
-                <span>
-                  Web Search: {webSearchEnabled ? 'On (Live Web Sources)' : 'Off'}
-                </span>
+                <span>Web Search: {webSearchEnabled ? 'ON' : 'OFF'}</span>
               </button>
 
               <span className="text-[11px] text-[#6B7280]">
-                Ask about any topic, apply Additional Context, or toggle Web Search
+                {webSearchEnabled
+                  ? 'AI can access live web search alongside Additional Context & active simulation'
+                  : 'AI operates without web search using Additional Context & active simulation only'}
               </span>
             </div>
           </form>

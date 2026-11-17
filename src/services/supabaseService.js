@@ -153,7 +153,7 @@ function mapPersonaRow(row) {
 
 function mapSimulationRow(row) {
   const rawTypeSpecific = row.type_specific_data || {};
-  const { _forecastConfig, ...cleanTypeSpecific } = rawTypeSpecific;
+  const { _forecastConfig, _webSearchEnabled, ...cleanTypeSpecific } = rawTypeSpecific;
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -169,6 +169,7 @@ function mapSimulationRow(row) {
     questions: Array.isArray(row.questions) ? row.questions : [],
     selectedPersonas: Array.isArray(row.selected_personas) ? row.selected_personas : [],
     forecastConfig: _forecastConfig || undefined,
+    webSearchEnabled: typeof _webSearchEnabled === "boolean" ? _webSearchEnabled : true,
     status: row.status || "Active",
     stage: row.stage || "Queued",
     progress: typeof row.progress === "number" ? row.progress : 0,
@@ -215,6 +216,22 @@ function mapRecentSearchRow(row) {
     targetId: row.target_id || undefined,
     timestamp: row.timestamp || row.created_at || new Date().toISOString(),
   };
+}
+
+function dedupeRecentSearchRows(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items) {
+    if (!item || !item.query) continue;
+    const cat = String(item.category || "Simulation").trim().toLowerCase();
+    const tKey = item.targetId ? `id:${cat}:${item.targetId}` : "";
+    const qKey = `q:${cat}:${String(item.query).trim().toLowerCase()}`;
+    if ((tKey && seen.has(tKey)) || seen.has(qKey)) continue;
+    if (tKey) seen.add(tKey);
+    seen.add(qKey);
+    out.push(item);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -390,7 +407,7 @@ export async function loadUserWorkspaceFromSupabase(sessionUser, requestedWorksp
     personas: [...activeBuiltIns, ...customPersonas],
     conversations: (convRes.data || []).map(mapConversationRow),
     reports: (repRes.data || []).map(mapReportRow),
-    recentSearches: (searchRes.data || []).map(mapRecentSearchRow),
+    recentSearches: dedupeRecentSearchRows((searchRes.data || []).map(mapRecentSearchRow)),
   };
 }
 
@@ -526,6 +543,9 @@ export async function saveSimulationToSupabase(userId, workspaceId, sim) {
   const typeSpecificPayload = {
     ...(sim.typeSpecificData || {}),
     ...(sim.forecastConfig ? { _forecastConfig: sim.forecastConfig } : {}),
+    ...(typeof sim.webSearchEnabled === "boolean"
+      ? { _webSearchEnabled: sim.webSearchEnabled }
+      : {}),
   };
 
   const rowPayload = {
@@ -612,17 +632,59 @@ export async function deleteReportInSupabase(userId, reportId) {
 }
 
 export async function logRecentSearchToSupabase(userId, workspaceId, item) {
-  if (!userId) return null;
+  if (!userId || !item?.query) return null;
   const safeWsId = await resolveSupabaseWorkspaceId(userId, workspaceId);
+  const cleanQuery = String(item.query).trim().slice(0, 80);
+  const category = item.category || "Simulation";
+  const targetId = item.targetId ? String(item.targetId).trim() : null;
+  const now = new Date().toISOString();
+
+  // Check if a matching search entry already exists so we reuse it instead of inserting a duplicate
+  let existingQuery = supabase
+    .from("recent_searches")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("category", category);
+
+  if (safeWsId) {
+    existingQuery = existingQuery.eq("workspace_id", safeWsId);
+  }
+
+  const { data: candidates } = await existingQuery.limit(50);
+  const normQuery = cleanQuery.toLowerCase();
+  const matched = Array.isArray(candidates)
+    ? candidates.find(
+        (row) =>
+          (targetId && row.target_id === targetId) ||
+          String(row.query || "").trim().toLowerCase() === normQuery
+      )
+    : null;
+
+  if (matched) {
+    const { data: updated, error: updateErr } = await supabase
+      .from("recent_searches")
+      .update({
+        query: cleanQuery,
+        target_id: targetId || matched.target_id || null,
+        timestamp: now,
+      })
+      .eq("id", matched.id)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+    if (!updateErr && updated) return mapRecentSearchRow(updated);
+    return mapRecentSearchRow({ ...matched, timestamp: now });
+  }
+
   const { data, error } = await supabase
     .from("recent_searches")
     .insert({
       user_id: userId,
       workspace_id: safeWsId,
-      query: item.query,
-      category: item.category || "Simulation",
-      target_id: item.targetId || null,
-      timestamp: new Date().toISOString(),
+      query: cleanQuery,
+      category,
+      target_id: targetId,
+      timestamp: now,
     })
     .select("*")
     .single();

@@ -115,6 +115,8 @@ function buildDeterministicEvidenceSynthesis(
     const topSource = sources[idx % Math.max(1, sources.length)];
     const sourceCitation = topSource
       ? `Grounded in retrieved source "${topSource.title}" (${topSource.url})`
+      : webResearch?.disabledByUser
+      ? "Evaluated directly from user scenario and persona parameters (Web Search OFF)"
       : "Derived from user scenario parameters (0 external web sources matched)";
 
     return {
@@ -215,13 +217,18 @@ function buildDeterministicEvidenceSynthesis(
 
   return {
     executiveSummary: {
-      mainFinding: `Across ${personaBreakdown.length} persona segment(s) (${totalAgents} total agents) and ${sources.length} real-time web source(s) retrieved via Firecrawl/Spider, "${sim.name}" achieved an agent-weighted utility index of ${weightedAcceptance}/100.`,
+      mainFinding:
+        webResearch?.disabledByUser
+          ? `Across ${personaBreakdown.length} persona segment(s) (${totalAgents} total agents) with Web Search OFF, "${sim.name}" achieved an agent-weighted utility index of ${weightedAcceptance}/100 based strictly on scenario inputs and persona parameters.`
+          : `Across ${personaBreakdown.length} persona segment(s) (${totalAgents} total agents) and ${sources.length} real-time web source(s) retrieved via Firecrawl/Spider, "${sim.name}" achieved an agent-weighted utility index of ${weightedAcceptance}/100.`,
       overallReaction:
         sources.length > 0
           ? `Grounded in ${sources.length} external web source(s) (${sources
               .slice(0, 2)
               .map((s) => s.title)
               .join("; ")}), audience segments prioritized transparent unit economics and low switching friction.`
+          : webResearch?.disabledByUser
+          ? "Evaluated without external web search using deterministic multi-attribute utility equations across persona price sensitivity, brand loyalty, and decision speed parameters."
           : "Evaluated using deterministic multi-attribute utility equations across persona price sensitivity, brand loyalty, and decision speed parameters.",
       importantOpportunities: [
         sources[0]
@@ -235,14 +242,20 @@ function buildDeterministicEvidenceSynthesis(
       ],
     },
     structuredSimulationReport: {
-      simulationOverview: `Evidence-grounded simulation for "${sim.name}" (${sim.type}) evaluating target audience "${
-        sim.targetAudience || "Selected Personas"
-      }" against real-time web evidence retrieved from Firecrawl/Spider and deterministic multi-attribute utility equations.`,
+      simulationOverview: webResearch?.disabledByUser
+        ? `Scenario-grounded simulation for "${sim.name}" (${sim.type}) evaluating target audience "${
+            sim.targetAudience || "Selected Personas"
+          }" with Web Search OFF, relying strictly on scenario context, attached materials, and deterministic multi-attribute utility equations.`
+        : `Evidence-grounded simulation for "${sim.name}" (${sim.type}) evaluating target audience "${
+            sim.targetAudience || "Selected Personas"
+          }" against real-time web evidence retrieved from Firecrawl/Spider and deterministic multi-attribute utility equations.`,
       scenarioAndParameters: `Simulation Type: ${sim.type} | Target Audience: ${
         sim.targetAudience || "Selected Personas"
       } | Hypothesis: ${sim.hypothesis || "N/A"} | Objectives: ${
         sim.researchObjectives || "N/A"
-      } | Total Agents: ${totalAgents} across ${personaBreakdown.length} segment(s).`,
+      } | Total Agents: ${totalAgents} across ${personaBreakdown.length} segment(s) | Web Search: ${
+        webResearch?.disabledByUser ? "OFF" : "ON"
+      }.`,
       researchFindings:
         sources.length > 0
           ? `Retrieved ${sources.length} real-time web source(s) via Firecrawl/Spider across queries [${(
@@ -251,6 +264,8 @@ function buildDeterministicEvidenceSynthesis(
             sources
               .map((s, idx) => `[${idx + 1}] ${s.title} (${s.url}): ${(s.excerpt || "").slice(0, 180)}`)
               .join(" | ")
+          : webResearch?.disabledByUser
+          ? "Web search was turned OFF by user; analysis operates strictly on user-supplied scenario parameters, attached materials, and explicit utility formulas without external web retrieval."
           : "External web search returned 0 matching documents for the specified query terms; analysis relies strictly on user-supplied parameters and explicit utility formulas.",
       importantFactsAndEvidence,
       verificationSummary: {
@@ -258,16 +273,27 @@ function buildDeterministicEvidenceSynthesis(
         conflictingInformationNotes:
           sources.length > 1
             ? `Cross-checked across ${sources.length} independent web sources retrieved via Firecrawl/Spider.`
+            : webResearch?.disabledByUser
+            ? "Web search was turned OFF; external source cross-checking was skipped."
             : "Single or zero external sources retrieved; cross-source conflict detection requires >=2 external sources.",
-        missingInformationAndLimitations: openRouterErrorNote
+        missingInformationAndLimitations: webResearch?.disabledByUser
+          ? `Web search was disabled by user (OFF mode). ${
+              openRouterErrorNote
+                ? `Synthesis note: ${openRouterErrorNote}. `
+                : ""
+            }Deterministic Multi-Attribute Utility Engine operated strictly on your provided inputs.`
+          : openRouterErrorNote
           ? `Real-time web research succeeded (${sources.length} sources via Firecrawl/Spider). OpenRouter LLM synthesis note: ${openRouterErrorNote}. Deterministic Multi-Attribute Utility Engine was used so no statistics were fabricated.`
           : "All quantitative scores are calculated from explicit persona parameters and retrieved web sources; simulated persona statements do not replace live human customer interviews.",
       },
-      simulationMethodology:
-        "Multi-Attribute Utility Theory (MAUT) combined with real-time Firecrawl/Spider web retrieval. Each persona segment i is evaluated via U_i = round(58 + 0.30*BrandLoyalty_i - 28*PriceSensitivityWeight_i + DecisionSpeedAdjustment_i + EvidenceBonus), weighted by agent count N_i.",
+      simulationMethodology: webResearch?.disabledByUser
+        ? "Multi-Attribute Utility Theory (MAUT) operating without external web search. Each persona segment i is evaluated via U_i = round(58 + 0.30*BrandLoyalty_i - 28*PriceSensitivityWeight_i + DecisionSpeedAdjustment_i), weighted by agent count N_i."
+        : "Multi-Attribute Utility Theory (MAUT) combined with real-time Firecrawl/Spider web retrieval. Each persona segment i is evaluated via U_i = round(58 + 0.30*BrandLoyalty_i - 28*PriceSensitivityWeight_i + DecisionSpeedAdjustment_i + EvidenceBonus), weighted by agent count N_i.",
       stepByStepResults: [
-        `Step 1 (Scenario Decomposition): Extracted ${(webResearch.queriesExecuted || []).length} targeted research queries from "${sim.name}".`,
-        `Step 2 (Real-Time Web Research): Executed live Firecrawl/Spider queries and retrieved ${sources.length} unique web source(s).`,
+        `Step 1 (Scenario Decomposition): Analyzed scenario parameters and audience segments for "${sim.name}".`,
+        webResearch?.disabledByUser
+          ? "Step 2 (Web Search OFF): Skipped external web search per user setting and loaded user-provided context only."
+          : `Step 2 (Real-Time Web Research): Executed live Firecrawl/Spider queries and retrieved ${sources.length} unique web source(s).`,
         `Step 3 (Source Verification): Classified ${sources.length} sourced web excerpts, ${relevantCalculations.length} calculated outputs, and explicit user assumptions.`,
         `Step 4 (Multi-Persona Utility Computation): Evaluated ${personaBreakdown.length} persona segment(s) (${totalAgents} agents), yielding a weighted utility index of ${weightedAcceptance}/100.`,
       ],
@@ -281,11 +307,15 @@ function buildDeterministicEvidenceSynthesis(
       )}/100 over current evaluation period).`,
       risksAndLimitations: [
         "Simulated persona utility scores reflect parameterized behavioral weights, not empirical human survey sample distributions.",
-        sources.length === 0
+        webResearch?.disabledByUser
+          ? "Web search was disabled (OFF); findings rely strictly on user-supplied scenario context and materials."
+          : sources.length === 0
           ? "Zero external web sources were returned for this query; findings depend entirely on user-supplied inputs."
           : `External web evidence is bounded by the ${sources.length} retrieved public web document(s) at ${webResearch.executedAt}.`,
       ],
-      finalConclusion: `Based on ${sources.length} real-time web source(s) and multi-attribute utility evaluation (${weightedAcceptance}/100 weighted score across ${totalAgents} agents), "${sim.name}" demonstrates strongest alignment when core ROI and onboarding friction objections are addressed directly.`,
+      finalConclusion: webResearch?.disabledByUser
+        ? `Operating with Web Search OFF via multi-attribute utility evaluation (${weightedAcceptance}/100 weighted score across ${totalAgents} agents), "${sim.name}" demonstrates strongest alignment when core ROI and onboarding friction objections are addressed directly.`
+        : `Based on ${sources.length} real-time web source(s) and multi-attribute utility evaluation (${weightedAcceptance}/100 weighted score across ${totalAgents} agents), "${sim.name}" demonstrates strongest alignment when core ROI and onboarding friction objections are addressed directly.`,
     },
     sentimentOverview: {
       positive: positiveShare,
@@ -382,74 +412,93 @@ export async function executeEvidenceBasedSimulation(params = {}) {
     }
   };
 
+  const webSearchEnabled =
+    params.enableWebSearch !== false && sim?.webSearchEnabled !== false;
+
   // STEP 1: Preparing simulation & understanding parameters
   await notifyStage("Preparing simulation", 15, 12);
   const researchPlan = buildSimulationResearchPlan(sim);
 
-  // STEP 2: Reuse pre-fetched web research when provided, otherwise execute within time budget
-  await notifyStage("Searching the web", 35, 9);
+  // STEP 2: Reuse pre-fetched web research when provided, skip if Web Search OFF, otherwise execute within time budget
   let webResearch;
-  if (
-    params.existingWebResearch &&
-    Array.isArray(params.existingWebResearch.sources)
-  ) {
-    const preSources = params.existingWebResearch.sources;
-    webResearch = {
-      executedAt: params.existingWebResearch.executedAt || new Date().toISOString(),
-      queriesExecuted:
-        Array.isArray(params.existingWebResearch.queriesExecuted) &&
-        params.existingWebResearch.queriesExecuted.length > 0
-          ? params.existingWebResearch.queriesExecuted
-          : researchPlan.extractedQueries,
-      anyServiceSucceeded:
-        typeof params.existingWebResearch.anyServiceSucceeded === "boolean"
-          ? params.existingWebResearch.anyServiceSucceeded
-          : preSources.length > 0,
-      totalSourcesRetrieved: preSources.length,
-      highAuthorityCount: preSources.filter((s) =>
-        String(s?.authorityTier || "").startsWith("High")
-      ).length,
-      sources: preSources.slice(0, 8),
-      diagnostics: params.existingWebResearch.diagnostics || [],
-    };
-  } else if (params.fastDeterministic) {
+  if (!webSearchEnabled) {
+    await notifyStage("Analyzing sources", 42, 8);
     webResearch = {
       executedAt: new Date().toISOString(),
-      queriesExecuted: researchPlan.extractedQueries,
+      queriesExecuted: [],
       anyServiceSucceeded: false,
       totalSourcesRetrieved: 0,
       highAuthorityCount: 0,
       sources: [],
       diagnostics: [],
+      disabledByUser: true,
     };
   } else {
-    const searchBudgetMs = Math.max(
-      1200,
-      Math.min(isServerlessEnv ? 2200 : 5000, Math.floor((hardDeadline - Date.now()) * 0.4))
-    );
-    webResearch = await performRealTimeWebResearch({
-      queries: researchPlan.extractedQueries,
-      urlsToScrape: researchPlan.urlsToScrape,
-      timeBudgetMs: searchBudgetMs,
-    }).catch(() => ({
-      executedAt: new Date().toISOString(),
-      queriesExecuted: researchPlan.extractedQueries,
-      anyServiceSucceeded: false,
-      totalSourcesRetrieved: 0,
-      highAuthorityCount: 0,
-      sources: [],
-      diagnostics: [],
-    }));
+    await notifyStage("Searching the web", 35, 9);
+    if (
+      params.existingWebResearch &&
+      Array.isArray(params.existingWebResearch.sources)
+    ) {
+      const preSources = params.existingWebResearch.sources;
+      webResearch = {
+        executedAt: params.existingWebResearch.executedAt || new Date().toISOString(),
+        queriesExecuted:
+          Array.isArray(params.existingWebResearch.queriesExecuted) &&
+          params.existingWebResearch.queriesExecuted.length > 0
+            ? params.existingWebResearch.queriesExecuted
+            : researchPlan.extractedQueries,
+        anyServiceSucceeded:
+          typeof params.existingWebResearch.anyServiceSucceeded === "boolean"
+            ? params.existingWebResearch.anyServiceSucceeded
+            : preSources.length > 0,
+        totalSourcesRetrieved: preSources.length,
+        highAuthorityCount: preSources.filter((s) =>
+          String(s?.authorityTier || "").startsWith("High")
+        ).length,
+        sources: preSources.slice(0, 8),
+        diagnostics: params.existingWebResearch.diagnostics || [],
+      };
+    } else if (params.fastDeterministic) {
+      webResearch = {
+        executedAt: new Date().toISOString(),
+        queriesExecuted: researchPlan.extractedQueries,
+        anyServiceSucceeded: false,
+        totalSourcesRetrieved: 0,
+        highAuthorityCount: 0,
+        sources: [],
+        diagnostics: [],
+      };
+    } else {
+      const searchBudgetMs = Math.max(
+        1200,
+        Math.min(isServerlessEnv ? 2200 : 5000, Math.floor((hardDeadline - Date.now()) * 0.4))
+      );
+      webResearch = await performRealTimeWebResearch({
+        queries: researchPlan.extractedQueries,
+        urlsToScrape: researchPlan.urlsToScrape,
+        timeBudgetMs: searchBudgetMs,
+      }).catch(() => ({
+        executedAt: new Date().toISOString(),
+        queriesExecuted: researchPlan.extractedQueries,
+        anyServiceSucceeded: false,
+        totalSourcesRetrieved: 0,
+        highAuthorityCount: 0,
+        sources: [],
+        diagnostics: [],
+      }));
+    }
   }
 
   // STEP 3: Analyzing sources & Verifying information
   await notifyStage("Analyzing sources", 58, 6);
   const hasVerifiedWebSources =
-    webResearch.anyServiceSucceeded && webResearch.sources.length > 0;
+    webSearchEnabled && webResearch.anyServiceSucceeded && webResearch.sources.length > 0;
 
   await notifyStage("Verifying information", 74, 4);
 
-  const formattedSourcesForPrompt = hasVerifiedWebSources
+  const formattedSourcesForPrompt = !webSearchEnabled
+    ? "WEB SEARCH IS TURNED OFF BY THE USER: Do NOT claim live web searches were executed. Operate strictly using the user-supplied simulation scenario, persona parameters, attached materials, and transparent analytical equations."
+    : hasVerifiedWebSources
     ? webResearch.sources
         .slice(0, 5)
         .map(
@@ -573,8 +622,9 @@ ${personaDescriptions || "Default Audience Panel"}
 === 3. QUESTION BATTERY ===
 ${questionList || "No custom questions specified"}
 
-=== 4. REAL-TIME WEB RESEARCH RETRIEVED (FIRECRAWL / SPIDER) ===
-Queries Executed: ${researchPlan.extractedQueries.join(" | ")}
+=== 4. REAL-TIME WEB RESEARCH STATUS ===
+Web Search Mode: ${webSearchEnabled ? "ON" : "OFF (Disabled by User)"}
+Queries Executed: ${webSearchEnabled ? researchPlan.extractedQueries.join(" | ") : "None (Web Search OFF)"}
 Total Sources Retrieved: ${webResearch.sources.length}
 ${formattedSourcesForPrompt}
 
@@ -664,11 +714,17 @@ Return a JSON object with these exact top-level keys:
   const structuredReportObj = {
     ...(parsed.structuredSimulationReport || parsed.structuredReport || {}),
     sourcesAndReferences,
-    researchDiagnostics: webResearch.diagnostics,
+    researchDiagnostics: {
+      webSearchEnabled,
+      queriesExecuted: webResearch.queriesExecuted || [],
+      providers: webResearch.diagnostics || [],
+    },
   };
 
   const results = {
-    simulationNotice: hasVerifiedWebSources
+    simulationNotice: !webSearchEnabled
+      ? `Synthesized directly from your scenario parameters and multi-attribute utility modeling (${modelUsed}; Web Search OFF).`
+      : hasVerifiedWebSources
       ? `Grounded in ${webResearch.sources.length} real-time web source(s) retrieved via Firecrawl and Spider and synthesized with ${modelUsed}.`
       : `Synthesized using your scenario parameters and multi-attribute utility modeling (${modelUsed}).`,
     aiEngineMode: "openrouter-gemini-2.5-flash",
@@ -747,6 +803,7 @@ export async function handleSimulationRunRequest(req, res) {
       personas,
       existingWebResearch,
       existingTimesfmForecast,
+      enableWebSearch,
       fastDeterministic,
       maxExecutionMs,
     } = body || {};
@@ -763,6 +820,8 @@ export async function handleSimulationRunRequest(req, res) {
       allPersonas: Array.isArray(personas) ? personas : [],
       existingWebResearch: existingWebResearch || null,
       existingTimesfmForecast: existingTimesfmForecast || null,
+      enableWebSearch:
+        enableWebSearch !== false && simulation?.webSearchEnabled !== false,
       fastDeterministic: Boolean(fastDeterministic),
       maxExecutionMs:
         typeof maxExecutionMs === "number" && maxExecutionMs > 0

@@ -327,7 +327,11 @@ export const SimulationResultsView: React.FC<SimulationResultsViewProps> = ({
                   Engine:{' '}
                   {res.aiEngineMode === 'openrouter-gemini-2.5-flash' ||
                   res.aiEngineMode === 'openrouter-live'
-                    ? 'OpenRouter (google/gemini-2.5-flash) · Live Web Research'
+                    ? `OpenRouter (google/gemini-2.5-flash) · ${
+                        simulation.webSearchEnabled === false
+                          ? 'Web Search OFF'
+                          : 'Live Web Research'
+                      }`
                     : 'Clemir Evidence Simulation Engine'}
                 </span>
               </div>

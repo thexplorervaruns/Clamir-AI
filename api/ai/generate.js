@@ -392,7 +392,7 @@ export function buildContextualAssistantFallback({
       "1. Task and Project Planning: Tell me what you are trying to build or accomplish, and I will organize it into clear, practical steps with priorities and milestones.",
       "2. Context-Aware Strategy: Add one or more Additional Context boxes with your product details, audience constraints, or goals, and I will tailor every answer around them.",
       "3. Decision Making and Problem Solving: Share a challenge, trade-off, or set of options, and we will weigh the pros, cons, risks, and best next move.",
-      "4. Live Web Search and Simulation Analysis: Toggle Web Search anytime for live web sources, or select any simulation or persona to inspect results.",
+      "4. Live Web Search and Simulation Analysis: Toggle Web Search ON or OFF anytime to enrich answers with external sources or operate without web search, and select any simulation or persona to inspect results.",
       "What would you like to tackle first?",
     ].join("\n\n");
   }

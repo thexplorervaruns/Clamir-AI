@@ -200,6 +200,40 @@ function mergePersonaLists(
   return [...builtIns, ...customs];
 }
 
+function mergeRecentSearchLists(
+  lists: RecentSearchItem[][],
+  deletedIds: string[]
+): RecentSearchItem[] {
+  const deletedSet = new Set(deletedIds);
+  const byIdentity = new Map<string, RecentSearchItem>();
+  for (const list of lists) {
+    for (const item of list || []) {
+      if (!item || !item.id || deletedSet.has(item.id) || !item.query) continue;
+      const cat = String(item.category || 'Simulation').trim().toLowerCase();
+      const targetPart = item.targetId ? `id:${cat}:${item.targetId}` : '';
+      const queryPart = `q:${cat}:${String(item.query).trim().toLowerCase()}`;
+      const existingByTarget = targetPart ? byIdentity.get(targetPart) : undefined;
+      const existingByQuery = byIdentity.get(queryPart);
+      const existing = existingByTarget || existingByQuery;
+      const itemTs = new Date(item.timestamp || 0).getTime();
+      const existingTs = existing ? new Date(existing.timestamp || 0).getTime() : -1;
+      const chosen = !existing || itemTs >= existingTs ? item : existing;
+      if (targetPart) byIdentity.set(targetPart, chosen);
+      byIdentity.set(queryPart, chosen);
+    }
+  }
+  const uniqueById = new Map<string, RecentSearchItem>();
+  for (const item of byIdentity.values()) {
+    const cur = uniqueById.get(item.id);
+    if (!cur || new Date(item.timestamp || 0).getTime() >= new Date(cur.timestamp || 0).getTime()) {
+      uniqueById.set(item.id, item);
+    }
+  }
+  return Array.from(uniqueById.values())
+    .sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime())
+    .slice(0, 30);
+}
+
 type AppView = 'landing' | 'auth' | 'workspace';
 type WorkspaceTab =
   | 'dashboard'
@@ -243,6 +277,7 @@ export default function App() {
   // AI Agent & Shared Additional Context Boxes accessible across the entire app
   const [agentFocusSimId, setAgentFocusSimId] = useState<string | null>(null);
   const [agentFocusPersonaId, setAgentFocusPersonaId] = useState<string | null>(null);
+  const [agentFocusConvId, setAgentFocusConvId] = useState<string | null>(null);
   const [agentDrawerOpen, setAgentDrawerOpen] = useState<boolean>(false);
   const [additionalContexts, setAdditionalContexts] = useState<AdditionalContextBox[]>(() => {
     try {
@@ -319,6 +354,14 @@ export default function App() {
           `clemir_custom_personas_${userKey}`,
           []
         );
+        const deletedRecentSearchIds = loadLocalJson<string[]>(
+          `clemir_deleted_recent_search_ids_${userKey}`,
+          []
+        );
+        const cachedRecentSearches = loadLocalJson<RecentSearchItem[]>(
+          `clemir_recent_searches_${userKey}`,
+          []
+        );
 
         let supaData: any = null;
         if (session?.user && session.access_token === token) {
@@ -352,7 +395,12 @@ export default function App() {
             );
 
             setReports(supaData.reports || []);
-            setRecentSearches(supaData.recentSearches || []);
+            const mergedSupaSearches = mergeRecentSearchLists(
+              [supaData.recentSearches || [], cachedRecentSearches],
+              deletedRecentSearchIds
+            );
+            setRecentSearches(mergedSupaSearches);
+            saveLocalJson(`clemir_recent_searches_${userKey}`, mergedSupaSearches);
           }
         }
 
@@ -441,9 +489,22 @@ export default function App() {
             if (Array.isArray(data.reports)) {
               setReports(data.reports);
             }
-            if (Array.isArray(data.recentSearches)) {
-              setRecentSearches(data.recentSearches);
-            }
+            const mergedAllSearches = mergeRecentSearchLists(
+              [
+                supaData?.recentSearches || [],
+                Array.isArray(data.recentSearches) ? data.recentSearches : [],
+                loadLocalJson<RecentSearchItem[]>(
+                  `clemir_recent_searches_${finalUserKey}`,
+                  cachedRecentSearches
+                ),
+              ],
+              loadLocalJson<string[]>(
+                `clemir_deleted_recent_search_ids_${finalUserKey}`,
+                deletedRecentSearchIds
+              )
+            );
+            setRecentSearches(mergedAllSearches);
+            saveLocalJson(`clemir_recent_searches_${finalUserKey}`, mergedAllSearches);
             if (data.platformConfig) {
               setPlatformConfig(data.platformConfig);
             }
@@ -483,6 +544,23 @@ export default function App() {
             );
             setConversations(mergedStatelessConvs);
             saveLocalJson(`clemir_conversations_${finalUserKey}`, mergedStatelessConvs);
+
+            const deletedSearchIdsForUser = loadLocalJson<string[]>(
+              `clemir_deleted_recent_search_ids_${finalUserKey}`,
+              deletedRecentSearchIds
+            );
+            const cachedSearchesForUser = loadLocalJson<RecentSearchItem[]>(
+              `clemir_recent_searches_${finalUserKey}`,
+              cachedRecentSearches
+            );
+            setRecentSearches((prev) => {
+              const combined = mergeRecentSearchLists(
+                [supaData?.recentSearches || [], cachedSearchesForUser, prev],
+                deletedSearchIdsForUser
+              );
+              saveLocalJson(`clemir_recent_searches_${finalUserKey}`, combined);
+              return combined;
+            });
           }
         } else {
           const mergedFallbackSims = mergeSimulationLists(
@@ -763,14 +841,73 @@ export default function App() {
     setActiveTab('simulations');
   };
 
-  const handleOpenSimulation = async (simId: string) => {
+  const upsertRecentSearchLocal = (entry: {
+    id?: string;
+    query: string;
+    category: RecentSearchItem['category'];
+    targetId?: string;
+  }) => {
+    const cleanQuery = String(entry.query || '').trim().slice(0, 80);
+    if (!cleanQuery) return;
+    const userKey = user?.id || 'default';
+    const now = new Date().toISOString();
+    const normQuery = cleanQuery.toLowerCase();
+    const normCat = String(entry.category || 'Simulation').toLowerCase();
+
+    setRecentSearches((prev) => {
+      const existing = prev.find((item) => {
+        const sameCat = String(item.category || '').toLowerCase() === normCat;
+        if (entry.targetId && item.targetId === entry.targetId && sameCat) return true;
+        return sameCat && String(item.query || '').trim().toLowerCase() === normQuery;
+      });
+      const nextItem: RecentSearchItem = existing
+        ? {
+            ...existing,
+            query: cleanQuery,
+            targetId: entry.targetId || existing.targetId,
+            timestamp: now,
+          }
+        : {
+            id: entry.id || `rs-${Date.now()}`,
+            workspaceId: activeWorkspaceId || 'ws-default',
+            query: cleanQuery,
+            category: entry.category,
+            targetId: entry.targetId,
+            timestamp: now,
+          };
+      const deletedIds = loadLocalJson<string[]>(
+        `clemir_deleted_recent_search_ids_${userKey}`,
+        []
+      ).filter((dId) => dId !== nextItem.id);
+      saveLocalJson(`clemir_deleted_recent_search_ids_${userKey}`, deletedIds);
+
+      const next = mergeRecentSearchLists([[nextItem], prev], deletedIds);
+      saveLocalJson(`clemir_recent_searches_${userKey}`, next);
+      return next;
+    });
+  };
+
+  const handleOpenSimulation = async (
+    simId: string,
+    options?: { skipRecentSearchLog?: boolean }
+  ) => {
     setCreatingSim(false);
     setSelectedSimId(simId);
     setAgentFocusSimId(simId);
     setActiveTab('simulations');
-    // Log recent search/activity
+    if (options?.skipRecentSearchLog) {
+      return;
+    }
+
+    // Reuse existing recent search entry or log a new one without duplicating
     const sim = simulations.find((s) => s.id === simId);
     if (sim && authToken) {
+      upsertRecentSearchLocal({
+        query: sim.name,
+        category: 'Simulation',
+        targetId: sim.id,
+      });
+
       if (user) {
         await logRecentSearchToSupabase(user.id, activeWorkspaceId, {
           query: sim.name,
@@ -790,7 +927,6 @@ export default function App() {
           targetId: sim.id,
         }),
       }).catch(() => {});
-      fetchWorkspaceState(authToken, activeWorkspaceId);
     }
   };
 
@@ -860,6 +996,20 @@ export default function App() {
       return next;
     });
 
+    const firstUserMsg = normalizedConv.messages.find((m) => m.role === 'user')?.content;
+    const recentSearchQuery = (firstUserMsg || normalizedConv.title || '').trim().slice(0, 60);
+    const lastAssistantMsg = [...normalizedConv.messages]
+      .reverse()
+      .find((m) => m.role === 'assistant');
+    const searchCategory = lastAssistantMsg?.webSearchUsed ? 'WebSearch' : 'Agent';
+    if (recentSearchQuery) {
+      upsertRecentSearchLocal({
+        query: recentSearchQuery,
+        category: searchCategory,
+        targetId: normalizedConv.id,
+      });
+    }
+
     try {
       const {
         data: { session },
@@ -870,6 +1020,13 @@ export default function App() {
           normalizedConv.workspaceId,
           normalizedConv
         ).catch(() => null);
+        if (recentSearchQuery) {
+          await logRecentSearchToSupabase(session.user.id, normalizedConv.workspaceId, {
+            query: recentSearchQuery,
+            category: searchCategory,
+            targetId: normalizedConv.id,
+          }).catch(() => null);
+        }
       }
     } catch {
       // Kept safely in local state & localStorage
@@ -1037,25 +1194,47 @@ export default function App() {
   };
 
   const handleDeleteRecentSearch = async (id: string) => {
+    const userKey = user?.id || 'default';
+    const deletedIds = loadLocalJson<string[]>(
+      `clemir_deleted_recent_search_ids_${userKey}`,
+      []
+    );
+    if (!deletedIds.includes(id)) {
+      saveLocalJson(`clemir_deleted_recent_search_ids_${userKey}`, [...deletedIds, id]);
+    }
+    setRecentSearches((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      saveLocalJson(`clemir_recent_searches_${userKey}`, next);
+      return next;
+    });
+
     if (user) {
       await deleteRecentSearchInSupabase(user.id, id).catch(() => false);
     }
     await fetch(`/api/recent-searches/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
-    });
-    fetchWorkspaceState(authToken, activeWorkspaceId);
+    }).catch(() => null);
   };
 
   const handleClearRecentSearches = async () => {
+    const userKey = user?.id || 'default';
+    const existingIds = loadLocalJson<string[]>(
+      `clemir_deleted_recent_search_ids_${userKey}`,
+      []
+    );
+    const allIds = Array.from(new Set([...existingIds, ...recentSearches.map((r) => r.id)]));
+    saveLocalJson(`clemir_deleted_recent_search_ids_${userKey}`, allIds);
+    saveLocalJson(`clemir_recent_searches_${userKey}`, []);
+    setRecentSearches([]);
+
     if (user) {
       await clearRecentSearchesInSupabase(user.id, activeWorkspaceId).catch(() => false);
     }
     await fetch('/api/recent-searches', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${authToken}` },
-    });
-    fetchWorkspaceState(authToken, activeWorkspaceId);
+    }).catch(() => null);
   };
 
   const handleClearAllAccountData = async () => {
@@ -1375,11 +1554,50 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (item.targetId && item.category === 'Simulation') {
-                              handleOpenSimulation(item.targetId);
-                            } else if (item.category === 'Agent') {
+                            const normQuery = item.query.trim().toLowerCase();
+                            if (item.category === 'Simulation') {
+                              const matchedSim =
+                                (item.targetId && simulations.find((s) => s.id === item.targetId)) ||
+                                simulations.find(
+                                  (s) => s.name.trim().toLowerCase() === normQuery
+                                );
+                              if (matchedSim) {
+                                handleOpenSimulation(matchedSim.id, { skipRecentSearchLog: true });
+                              } else if (item.targetId) {
+                                handleOpenSimulation(item.targetId, { skipRecentSearchLog: true });
+                              } else {
+                                setActiveTab('simulations');
+                              }
+                            } else if (
+                              item.category === 'Agent' ||
+                              item.category === 'WebSearch'
+                            ) {
+                              const matchedConv =
+                                (item.targetId &&
+                                  conversations.find((c) => c.id === item.targetId)) ||
+                                conversations.find(
+                                  (c) =>
+                                    c.title.trim().toLowerCase() === normQuery ||
+                                    c.messages.some((m) =>
+                                      m.content.trim().toLowerCase().includes(normQuery)
+                                    )
+                                );
+                              if (matchedConv) {
+                                setAgentFocusConvId(matchedConv.id);
+                                if (matchedConv.simulationId) {
+                                  setAgentFocusSimId(matchedConv.simulationId);
+                                }
+                              }
                               setActiveTab('agent');
                             } else if (item.category === 'Audience') {
+                              const matchedPersona =
+                                (item.targetId && personas.find((p) => p.id === item.targetId)) ||
+                                personas.find(
+                                  (p) => p.name.trim().toLowerCase() === normQuery
+                                );
+                              if (matchedPersona) {
+                                setAgentFocusPersonaId(matchedPersona.id);
+                              }
                               setActiveTab('audience');
                             }
                           }}
@@ -1689,6 +1907,11 @@ export default function App() {
                           saveLocalJson(`clemir_simulations_${userKey}`, next);
                           return next;
                         });
+                        upsertRecentSearchLocal({
+                          query: createdSim.name,
+                          category: 'Simulation',
+                          targetId: createdSim.id,
+                        });
                       }
                       setCreatingSim(false);
                       setSelectedSimId(newSimId);
@@ -1858,6 +2081,7 @@ export default function App() {
                 onAdditionalContextsChange={setAdditionalContexts}
                 initialSimulationId={agentFocusSimId}
                 initialPersonaId={agentFocusPersonaId}
+                initialConversationId={agentFocusConvId}
                 authToken={authToken}
                 activeWorkspaceId={activeWorkspaceId}
                 onConversationsChanged={() => fetchWorkspaceState(authToken, activeWorkspaceId)}

@@ -45,6 +45,7 @@ export function performRealTimeWebResearch(params?: {
   queries?: string[];
   urlsToScrape?: string[];
   maxResultsPerQuery?: number;
+  timeBudgetMs?: number;
 }): Promise<{
   executedAt: string;
   queriesExecuted: string[];

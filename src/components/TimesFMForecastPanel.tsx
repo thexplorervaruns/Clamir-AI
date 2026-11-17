@@ -80,6 +80,9 @@ export const TimesFMForecastPanel: React.FC<TimesFMForecastPanelProps> = ({
         ]
   );
 
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(
+    simulation.webSearchEnabled ?? true
+  );
   const [running, setRunning] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -136,7 +139,7 @@ export const TimesFMForecastPanel: React.FC<TimesFMForecastPanelProps> = ({
           .join(' | '),
         rawData: inputMode === 'text' ? rawData : undefined,
         points: inputMode === 'table' ? pointsPayload : undefined,
-        enableWebSearch: true,
+        enableWebSearch: webSearchEnabled,
       };
 
       let updatedSim: Simulation | null = null;
@@ -579,30 +582,46 @@ export const TimesFMForecastPanel: React.FC<TimesFMForecastPanelProps> = ({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2">
-        {editingSeries && (
-          <button
-            type="button"
-            onClick={() => setEditingSeries(false)}
-            className="px-3.5 py-2 text-xs font-medium text-[#111827] bg-white border border-[#E5E7EB] rounded-md cursor-pointer"
-          >
-            Cancel
-          </button>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button
-          type="submit"
-          disabled={running}
-          className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 disabled:opacity-60 cursor-pointer"
+          type="button"
+          role="switch"
+          aria-checked={webSearchEnabled}
+          onClick={() => setWebSearchEnabled((prev) => !prev)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors cursor-pointer ${
+            webSearchEnabled
+              ? 'bg-[#000000] text-white border-[#000000]'
+              : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-[#000000] hover:text-[#111827]'
+          }`}
         >
-          <Activity className="w-3.5 h-3.5" />
-          <span>
-            {running
-              ? 'Computing TimesFM Projection...'
-              : forecast
-              ? 'Update TimesFM Forecast'
-              : 'Generate Embedded TimesFM Forecast'}
-          </span>
+          <span>Web Search: {webSearchEnabled ? 'ON' : 'OFF'}</span>
         </button>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {editingSeries && (
+            <button
+              type="button"
+              onClick={() => setEditingSeries(false)}
+              className="px-3.5 py-2 text-xs font-medium text-[#111827] bg-white border border-[#E5E7EB] rounded-md cursor-pointer"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={running}
+            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#000000] rounded-md hover:bg-neutral-800 disabled:opacity-60 cursor-pointer"
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span>
+              {running
+                ? 'Computing TimesFM Projection...'
+                : forecast
+                ? 'Update TimesFM Forecast'
+                : 'Generate Embedded TimesFM Forecast'}
+            </span>
+          </button>
+        </div>
       </div>
     </form>
   );

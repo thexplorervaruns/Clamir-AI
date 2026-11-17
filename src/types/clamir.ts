@@ -283,6 +283,7 @@ export interface Simulation {
   questions: SimulationQuestion[];
   selectedPersonas: SelectedPersonaConfig[];
   forecastConfig?: SimulationForecastConfig;
+  webSearchEnabled?: boolean;
   status: 'Active' | 'Completed' | 'Stopped' | 'Failed';
   stage: SimulationStage;
   progress: number; // 0 to 100

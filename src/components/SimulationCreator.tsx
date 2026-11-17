@@ -77,6 +77,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [launchStatus, setLaunchStatus] = useState('Launching Simulation...');
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(true);
 
   // Step 1: Setup & Type-Specific Fields — All text fields start completely empty
   const [simType, setSimType] = useState<SimulationTypeId>(initialType);
@@ -645,6 +646,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         questions,
         selectedPersonas: effectivePersonas,
         forecastConfig: resolvedForecastConfig,
+        webSearchEnabled,
         personas: relevantPersonas,
       };
 
@@ -666,6 +668,7 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         questions: simulationPayload.questions,
         selectedPersonas: simulationPayload.selectedPersonas,
         forecastConfig: resolvedForecastConfig,
+        webSearchEnabled,
         status: 'Completed',
         stage: 'Completed',
         progress: 100,
@@ -712,40 +715,42 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
         let preResearch: any = null;
         let preForecast: any = null;
 
-        // 2a. Pre-fetch web research in its own dedicated serverless slot
-        setLaunchStatus('Searching Market Evidence...');
-        const baseQuery = [
-          simulationPayload.name,
-          simulationPayload.targetAudience,
-          marketOrIndustry,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .trim();
-        const searchQueries = [
-          baseQuery ? `${baseQuery} market benchmarks research` : 'market benchmarks research',
-          simulationPayload.hypothesis
-            ? `${simulationPayload.hypothesis.slice(0, 80)} industry data`
-            : '',
-        ].filter(Boolean);
-        const searchUrls = [
-          websiteOrProductUrl,
-          ...materials.filter((m) => m.kind === 'url' && m.url).map((m) => m.url!),
-        ].filter(Boolean);
+        // 2a. Pre-fetch web research only when Web Search is toggled ON
+        if (webSearchEnabled) {
+          setLaunchStatus('Searching Market Evidence...');
+          const baseQuery = [
+            simulationPayload.name,
+            simulationPayload.targetAudience,
+            marketOrIndustry,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .trim();
+          const searchQueries = [
+            baseQuery ? `${baseQuery} market benchmarks research` : 'market benchmarks research',
+            simulationPayload.hypothesis
+              ? `${simulationPayload.hypothesis.slice(0, 80)} industry data`
+              : '',
+          ].filter(Boolean);
+          const searchUrls = [
+            websiteOrProductUrl,
+            ...materials.filter((m) => m.kind === 'url' && m.url).map((m) => m.url!),
+          ].filter(Boolean);
 
-        const researchRes = await fetchWithTimeout(
-          '/api/research/search',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ queries: searchQueries, urls: searchUrls }),
-          },
-          8000
-        ).catch(() => null);
-        if (researchRes && researchRes.ok) {
-          const researchJson = await readJsonSafe(researchRes);
-          if (researchJson.ok && researchJson.data) {
-            preResearch = researchJson.data;
+          const researchRes = await fetchWithTimeout(
+            '/api/research/search',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ queries: searchQueries, urls: searchUrls }),
+            },
+            8000
+          ).catch(() => null);
+          if (researchRes && researchRes.ok) {
+            const researchJson = await readJsonSafe(researchRes);
+            if (researchJson.ok && researchJson.data) {
+              preResearch = researchJson.data;
+            }
           }
         }
 
@@ -762,8 +767,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                 domainContext: [researchContext, hypothesis, simulationPayload.targetAudience]
                   .filter(Boolean)
                   .join(' | '),
-                enableWebSearch: !preResearch,
-                existingWebResearch: preResearch,
+                enableWebSearch: webSearchEnabled && !preResearch,
+                existingWebResearch: webSearchEnabled ? preResearch : null,
               }),
             },
             9000
@@ -789,7 +794,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             body: JSON.stringify({
               simulation: simulationPayload,
               personas: relevantPersonas,
-              existingWebResearch: preResearch,
+              enableWebSearch: webSearchEnabled,
+              existingWebResearch: webSearchEnabled ? preResearch : null,
               existingTimesfmForecast: preForecast,
               maxExecutionMs: 5500,
             }),
@@ -824,7 +830,8 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
               body: JSON.stringify({
                 simulation: simulationPayload,
                 personas: relevantPersonas,
-                existingWebResearch: preResearch,
+                enableWebSearch: webSearchEnabled,
+                existingWebResearch: webSearchEnabled ? preResearch : null,
                 existingTimesfmForecast: preForecast,
                 fastDeterministic: true,
               }),
@@ -954,7 +961,22 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={webSearchEnabled}
+            onClick={() => setWebSearchEnabled((prev) => !prev)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors cursor-pointer ${
+              webSearchEnabled
+                ? 'bg-[#000000] text-white border-[#000000]'
+                : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-[#000000] hover:text-[#111827]'
+            }`}
+            title="Toggle live web search ON or OFF for this simulation"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Web Search: {webSearchEnabled ? 'ON' : 'OFF'}</span>
+          </button>
           <button
             type="button"
             onClick={() => setShowCustomAudienceCreator(true)}
@@ -2162,6 +2184,30 @@ export const SimulationCreator: React.FC<SimulationCreatorProps> = ({
                     : 'Optional (can be attached after simulation runs)'}
                 </strong>
               </p>
+              <div className="pt-2 flex items-center justify-between gap-2 border-t border-[#E5E7EB]">
+                <div>
+                  <span className="text-[#6B7280] block">Simulation Web Search Access:</span>
+                  <span className="text-[11px] text-[#6B7280]">
+                    {webSearchEnabled
+                      ? 'ON — AI searches external web benchmarks & sources.'
+                      : 'OFF — AI runs strictly on your scenario inputs & materials.'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={webSearchEnabled}
+                  onClick={() => setWebSearchEnabled((prev) => !prev)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-semibold shrink-0 cursor-pointer ${
+                    webSearchEnabled
+                      ? 'bg-[#000000] text-white border-[#000000]'
+                      : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:border-[#000000] hover:text-[#111827]'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>{webSearchEnabled ? 'ON' : 'OFF'}</span>
+                </button>
+              </div>
             </div>
           </div>
 

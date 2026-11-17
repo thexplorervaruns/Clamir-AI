@@ -440,6 +440,70 @@ function getAllPersonasForWorkspace(workspaceId: string): Persona[] {
   }));
 }
 
+function dedupeRecentSearchList(items: RecentSearchItem[]): RecentSearchItem[] {
+  const seenKeys = new Set<string>();
+  const out: RecentSearchItem[] = [];
+  for (const item of items) {
+    if (!item || !item.query) continue;
+    const cat = String(item.category || 'Simulation').trim().toLowerCase();
+    const targetKey = item.targetId ? `id:${cat}:${item.targetId}` : '';
+    const queryKey = `q:${cat}:${String(item.query).trim().toLowerCase()}`;
+    if ((targetKey && seenKeys.has(targetKey)) || seenKeys.has(queryKey)) {
+      continue;
+    }
+    if (targetKey) seenKeys.add(targetKey);
+    seenKeys.add(queryKey);
+    out.push(item);
+  }
+  return out;
+}
+
+function upsertRecentSearchRecord(params: {
+  workspaceId: string;
+  query: string;
+  category?: RecentSearchItem['category'];
+  targetId?: string;
+}): RecentSearchItem {
+  const cleanQuery = String(params.query || '').trim().slice(0, 80);
+  const category = params.category || 'Simulation';
+  const targetId = params.targetId ? String(params.targetId).trim() : undefined;
+  const now = new Date().toISOString();
+
+  const normQuery = cleanQuery.toLowerCase();
+  const normCat = String(category).toLowerCase();
+  const existingIdx = db.recentSearches.findIndex((r) => {
+    if (r.workspaceId !== params.workspaceId) return false;
+    const sameCategory = String(r.category || '').toLowerCase() === normCat;
+    if (targetId && r.targetId === targetId && sameCategory) return true;
+    return sameCategory && String(r.query || '').trim().toLowerCase() === normQuery;
+  });
+
+  if (existingIdx !== -1) {
+    const existing = {
+      ...db.recentSearches[existingIdx],
+      query: cleanQuery || db.recentSearches[existingIdx].query,
+      targetId: targetId || db.recentSearches[existingIdx].targetId,
+      timestamp: now,
+    };
+    db.recentSearches.splice(existingIdx, 1);
+    db.recentSearches.unshift(existing);
+    db.recentSearches = dedupeRecentSearchList(db.recentSearches).slice(0, 30);
+    return existing;
+  }
+
+  const created: RecentSearchItem = {
+    id: `rs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    workspaceId: params.workspaceId,
+    query: cleanQuery,
+    category,
+    targetId,
+    timestamp: now,
+  };
+  db.recentSearches.unshift(created);
+  db.recentSearches = dedupeRecentSearchList(db.recentSearches).slice(0, 30);
+  return created;
+}
+
 // ---------------------------------------------------------------------------
 // 4. Real-Time Web Research & OpenRouter Simulation Processing Pipeline
 // ---------------------------------------------------------------------------
@@ -462,6 +526,7 @@ async function synthesizeSimulationResults(
   const { results } = await executeEvidenceBasedSimulation({
     simulation: sim,
     personas: allPersonas,
+    enableWebSearch: sim.webSearchEnabled !== false,
     onStageChange,
   });
   return results as SimulationResults;
@@ -880,7 +945,9 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       personas: getAllPersonasForWorkspace(wsId),
       conversations: db.conversations.filter((c) => c.workspaceId === wsId),
       reports: db.reports.filter((r) => r.workspaceId === wsId),
-      recentSearches: db.recentSearches.filter((rs) => rs.workspaceId === wsId),
+      recentSearches: dedupeRecentSearchList(
+        db.recentSearches.filter((rs) => rs.workspaceId === wsId)
+      ),
       platformConfig: db.platformConfig,
     });
   });
@@ -1026,6 +1093,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       questions: Array.isArray(body.questions) ? body.questions : [],
       selectedPersonas: Array.isArray(body.selectedPersonas) ? body.selectedPersonas : [],
       forecastConfig: body.forecastConfig || undefined,
+      webSearchEnabled: body.webSearchEnabled !== false,
       status: 'Active',
       stage: 'Queued',
       progress: 8,
@@ -1034,13 +1102,11 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     };
 
     db.simulations.unshift(newSim);
-    db.recentSearches.unshift({
-      id: `rs-${Date.now()}`,
+    upsertRecentSearchRecord({
       workspaceId: newSim.workspaceId,
       query: newSim.name,
       category: 'Simulation',
       targetId: newSim.id,
-      timestamp: new Date().toISOString(),
     });
     saveDatabase(db);
 
@@ -1492,22 +1558,24 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     };
     conv.messages.push(userMsgObj);
 
-    db.recentSearches.unshift({
-      id: `rs-${Date.now()}`,
+    const shouldWebSearch = webSearch !== false;
+
+    upsertRecentSearchRecord({
       workspaceId: activeWs.id,
       query: cleanMsg.slice(0, 60),
-      category: webSearch ? 'WebSearch' : 'Agent',
-      timestamp: new Date().toISOString(),
+      category: shouldWebSearch ? 'WebSearch' : 'Agent',
+      targetId: conv.id,
     });
 
     const extractedSources: AgentSourceCitation[] = [];
     let rawWebSources: any[] = [];
 
-    if (webSearch) {
+    if (shouldWebSearch) {
       try {
         const searchBundle = await performRealTimeWebResearch({
           queries: [cleanMsg],
           maxResultsPerQuery: 5,
+          timeBudgetMs: 4500,
         });
         rawWebSources = searchBundle.sources || [];
         for (const src of rawWebSources) {
@@ -1546,7 +1614,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       role: 'assistant',
       content: reply,
       timestamp: new Date().toISOString(),
-      webSearchUsed: Boolean(webSearch),
+      webSearchUsed: shouldWebSearch,
       sources: extractedSources,
     });
     conv.updatedAt = new Date().toISOString();
@@ -1556,7 +1624,7 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
       conversation: conv,
       model,
       webSearchInfo: {
-        executed: Boolean(webSearch),
+        executed: shouldWebSearch,
         sourcesFound: extractedSources.length,
       },
     });
@@ -1598,19 +1666,17 @@ Return ONLY a valid JSON object with keys: "reaction" (string), "acceptanceScore
     const user = req.user!;
     const activeWs = db.workspaces.find((w) => w.ownerId === user.id) || db.workspaces[0];
     const { query, category, targetId } = req.body || {};
-    if (query) {
-      db.recentSearches.unshift({
-        id: `rs-${Date.now()}`,
+    let savedItem: RecentSearchItem | null = null;
+    if (query && String(query).trim()) {
+      savedItem = upsertRecentSearchRecord({
         workspaceId: activeWs.id,
-        query: String(query).slice(0, 80),
+        query: String(query),
         category: category || 'Simulation',
         targetId,
-        timestamp: new Date().toISOString(),
       });
-      db.recentSearches = db.recentSearches.slice(0, 30);
       saveDatabase(db);
     }
-    res.json({ ok: true });
+    res.json({ ok: true, item: savedItem });
   });
 
   app.delete('/api/recent-searches/:id', requireAuth, (req: AuthedRequest, res) => {

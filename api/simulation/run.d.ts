@@ -1,6 +1,13 @@
 export function executeEvidenceBasedSimulation(params: {
-  simulation: any;
-  personas: any[];
+  simulation?: any;
+  sim?: any;
+  personas?: any[];
+  allPersonas?: any[];
+  enableWebSearch?: boolean;
+  fastDeterministic?: boolean;
+  maxExecutionMs?: number;
+  existingWebResearch?: any;
+  existingTimesfmForecast?: any;
   onStageChange?: (stage: string) => void;
 }): Promise<{
   results: any;
